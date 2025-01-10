@@ -30,12 +30,3 @@ jobs:
           context: ./
           push: true
           tags: improwised/kube-oidc-proxy:${{ steps.tag.outputs.tag }}
-
-      - name: status of workflow
-        uses: rtCamp/action-slack-notify@v2
-        if: always()
-        env:
-          SLACK_WEBHOOK: ${{ secrets.WEBHOOK_URL }}
-          SLACK_COLOR: ${{ job.status }}
-          SLACK_FOOTER: ""
-          SLACK_MESSAGE: "Build workflow run **${{ job.status }}**"
