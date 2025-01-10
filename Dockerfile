@@ -1,9 +1,10 @@
-# Copyright Jetstack Ltd. See LICENSE for details.
-FROM ubuntu:22.04
-LABEL description="OIDC reverse proxy authenticator based on Kubernetes"
 
-RUN apt-get update;apt-get -y install ca-certificates;apt-get -y upgrade;apt-get clean;rm -rf /var/lib/apt/lists/*
+FROM golang:1.23.4-alpine3.21 AS build
+WORKDIR /api
+COPY . .
+RUN go mod download
+RUN go build  -o=proxy ./cmd/.
 
-COPY ./bin/kube-oidc-proxy /usr/bin/kube-oidc-proxy
-
-CMD ["/usr/bin/kube-oidc-proxy"]
+FROM alpine
+WORKDIR /api
+COPY --from=build /api/proxy .
