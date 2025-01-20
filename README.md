@@ -183,7 +183,7 @@ The proxy uses roles to define user permissions for each cluster. Roles can be t
    ```yaml
    rules:
      - apiGroups: ["*"]
-       resources: ["pods", "pods/log", "pods/exec"]
+       resources: ["pods", "pods/log"]
        verbs: ["list", "watch", "get"]
    ```
 
