@@ -15,7 +15,7 @@
 - [🔍 Custom Webhook Auditing](#-custom-webhook-auditing)
 - [🖥 Development](#-development)
   - [📝 Step 1: Keycloak Configuration](#-step-1-keycloak-configuration)
-  - [⚙️ Step 2: Build the Binary](#-step-2-build-the-binary)
+  - [⚙️ Step 2: Build the Binary](#️-step-2-build-the-binary)
   - [🚀 Step 3: Run the Proxy](#-step-3-run-the-proxy)
   - [🛡 Flag Descriptions](#-flag-descriptions)
 
