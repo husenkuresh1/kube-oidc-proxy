@@ -5,14 +5,19 @@
 - [✨ Introduction](#-introduction)
 - [📦 Handling kubectl Requests with Multi-Cluster Support](#-handling-kubectl-requests-with-multi-cluster-support)
 - [🔧 Setting Up Multiple Clusters](#-setting-up-multiple-clusters)
+- [🗂️ Configuring kubeconfig with kubelogin](#️-configuring-kubeconfig-with-kubelogin)
 - [🔑 Roles and Permissions](#-roles-and-permissions)
   - [🛠 Default Roles and Permissions](#-default-roles-and-permissions)
   - [📂 Namespace-Specific Access](#-namespace-specific-access)
   - [🌐 Cluster-Wide Access](#-cluster-wide-access)
-  - [⚙️ Custom Roles and Permissions](#-custom-roles-and-permissions)
+  - [⚙️ Custom Roles and Permissions](#️-custom-roles-and-permissions)
 - [📜 Logging](#-logging)
 - [🔍 Custom Webhook Auditing](#-custom-webhook-auditing)
 - [🖥 Development](#-development)
+  - [📝 Step 1: Keycloak Configuration](#-step-1-keycloak-configuration)
+  - [⚙️ Step 2: Build the Binary](#️-step-2-build-the-binary)
+  - [🚀 Step 3: Run the Proxy](#-step-3-run-the-proxy)
+  - [🛡 Flag Descriptions](#-flag-descriptions)
 
 ---
 
@@ -89,6 +94,77 @@ The proxy now authenticates and authorizes requests for all configured clusters.
 
 ---
 
+## 🗂️ Configuring kubeconfig with kubelogin
+
+To enhance security, we use **kubelogin** for dynamic token generation and authentication with a proxy server. Follow these steps to set up **kubelogin** on your system.
+
+### Step 1: Install Krew
+Krew is a package manager for `kubectl` plugins. Run the following command to download and install Krew:
+
+```bash
+(
+  set -x; cd "$(mktemp -d)" &&
+  OS="$(uname | tr '[:upper:]' '[:lower:]')" &&
+  ARCH="$(uname -m | sed -e 's/x86_64/amd64/' -e 's/\(arm\)\(64\)\?.*/\1\2/' -e 's/aarch64$/arm64/')" &&
+  KREW="krew-${OS}_${ARCH}" &&
+  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
+  tar zxvf "${KREW}.tar.gz" &&
+  ./${KREW} install krew
+)
+```
+
+### Step 2: Add Krew to PATH
+After installing Krew, add its binary directory to your `PATH` environment variable. Edit your `.bashrc` or `.zshrc` file and append the following line:
+
+```bash
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+```
+
+Then, reload your shell configuration:
+
+```bash
+source ~/.bashrc  # or source ~/.zshrc
+```
+
+### Step 3: Install kubelogin Plugin
+Install the **kubelogin** plugin using Krew:
+
+```bash
+kubectl krew install oidc-login
+```
+
+### Step 4: kubeconfig File Format
+Here is an example `kubeconfig` file configured to use **kubelogin**:
+
+```yaml
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: <base64-ca-cert-of-proxy-server>
+    server: https://<proxy-ip>:<proxy-port>/<cluster-name>
+  name: <cluster-name>
+contexts:
+- context:
+    cluster: <cluster-name>
+    user: <user>
+  name: <context-name>
+current-context: <context-name>
+kind: Config
+preferences: {}
+users:
+- name: <user>
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1beta1
+      args:
+      - oidc-login
+      - get-token
+      - --oidc-issuer-url=<oidc-issuer-url>
+      - --oidc-client-id=<oidc-client-id>
+      - --oidc-client-secret=<oidc-client-secret>
+      command: kubectl
+```
+
 ## 🔑 Roles and Permissions
 
 The proxy uses roles to define user permissions for each cluster. Roles can be tailored to organizational needs. 🏗️
@@ -107,7 +183,7 @@ The proxy uses roles to define user permissions for each cluster. Roles can be t
    ```yaml
    rules:
      - apiGroups: ["*"]
-       resources: ["pods", "pods/log", "pods/exec"]
+       resources: ["pods", "pods/log"]
        verbs: ["list", "watch", "get"]
    ```
 
@@ -232,6 +308,7 @@ Audit logs are sent to:
 
 1. Create a new [client](https://github.com/Improwised/kube-oidc-proxy/issues/13#issuecomment-2576744735) in Keycloak.
 2. Assign client [scopes and mappers](https://github.com/Improwised/kube-oidc-proxy/issues/13#issuecomment-2579232821) to client.
+3. Create and assign [roles](https://github.com/Improwised/kube-oidc-proxy/issues/13#issuecomment-2601407225) to users.
 
 ### ⚙️ Step 2: Build the Binary
 
