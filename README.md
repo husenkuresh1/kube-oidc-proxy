@@ -10,7 +10,7 @@
   - [🛠 Default Roles and Permissions](#-default-roles-and-permissions)
   - [📂 Namespace-Specific Access](#-namespace-specific-access)
   - [🌐 Cluster-Wide Access](#-cluster-wide-access)
-  - [⚙️ Custom Roles and Permissions](#-custom-roles-and-permissions)
+  - [⚙️ Custom Roles and Permissions](#️-custom-roles-and-permissions)
 - [📜 Logging](#-logging)
 - [🔍 Custom Webhook Auditing](#-custom-webhook-auditing)
 - [🖥 Development](#-development)
