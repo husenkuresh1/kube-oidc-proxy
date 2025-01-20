@@ -14,6 +14,10 @@
 - [📜 Logging](#-logging)
 - [🔍 Custom Webhook Auditing](#-custom-webhook-auditing)
 - [🖥 Development](#-development)
+  - [📝 Step 1: Keycloak Configuration](#-step-1-keycloak-configuration)
+  - [⚙️ Step 2: Build the Binary](#-step-2-build-the-binary)
+  - [🚀 Step 3: Run the Proxy](#-step-3-run-the-proxy)
+  - [🛡 Flag Descriptions](#-flag-descriptions)
 
 ---
 
@@ -304,6 +308,7 @@ Audit logs are sent to:
 
 1. Create a new [client](https://github.com/Improwised/kube-oidc-proxy/issues/13#issuecomment-2576744735) in Keycloak.
 2. Assign client [scopes and mappers](https://github.com/Improwised/kube-oidc-proxy/issues/13#issuecomment-2579232821) to client.
+3. Create and assign [roles](https://github.com/Improwised/kube-oidc-proxy/issues/13#issuecomment-2601407225) to users.
 
 ### ⚙️ Step 2: Build the Binary
 
