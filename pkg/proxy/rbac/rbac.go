@@ -27,7 +27,7 @@ var defalutRole = map[string]v1.PolicyRule{
 	"developer-portforward": {
 		Verbs:     []string{"get", "list", "watch"},
 		APIGroups: []string{"*"},
-		Resources: []string{"pods", "pods/log", "pods/exec", "pods/portforward"},
+		Resources: []string{"pods", "pods/log", "pods/portforward"},
 	},
 	"watcher": {
 		Verbs:     []string{"get", "list", "watch"},

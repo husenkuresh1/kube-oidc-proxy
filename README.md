@@ -199,7 +199,7 @@ The proxy uses roles to define user permissions for each cluster. Roles can be t
    ```yaml
    rules:
      - apiGroups: ["*"]
-       resources: ["pods", "pods/log", "pods/exec", "pods/portforward"]
+       resources: ["pods", "pods/log", "pods/portforward"]
        verbs: ["list", "watch", "get"]
    ```
 
