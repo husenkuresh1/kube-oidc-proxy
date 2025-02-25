@@ -198,11 +198,17 @@ The proxy uses roles to define user permissions for each cluster. Roles can be t
 4. **Developer with Port-Forward**
    ```yaml
    rules:
-     - apiGroups: ["*"]
+     - apiGroups: [""]
        resources: ["pods", "pods/log", "pods/portforward"]
-       verbs: ["list", "watch", "get"]
+       verbs: ["list", "watch", "get","create"]
    ```
-
+5. **Developer with Port-Exec and Port-Forward**
+   ```yaml
+   rules:
+     - apiGroups: [""]
+       resources: ["pods", "pods/log", "pods/portforward", "pods/exec"]
+       verbs: ["list", "watch", "get","create"]
+   ```
 ### 📂 Namespace-Specific Access
 
 Use the format `<cluster-name>:<role>:<namespace>` for namespace-specific roles. Assign this role to users in Keycloak.
