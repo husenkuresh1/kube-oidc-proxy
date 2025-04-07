@@ -11,6 +11,8 @@ import (
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
 	"github.com/Improwised/kube-oidc-proxy/pkg/probe"
@@ -20,6 +22,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	rbacvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -89,6 +92,9 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 					return err
 				}
 				cluster.RestConfig = r
+				if cluster.RBACConfig == nil {
+					cluster.RBACConfig = &util.RBAC{}
+				}
 			}
 
 			// Initialise token reviewer if enabled
@@ -168,6 +174,26 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			go customRoleWatcher.Informer.Run(stopCh)
 
+			if !cache.WaitForCacheSync(stopCh, customRoleWatcher.Informer.HasSynced) {
+				klog.Error("Timed out waiting for caches to sync")
+			}
+
+			existingObjects := customRoleWatcher.Informer.GetStore().List()
+
+			for _, obj := range existingObjects {
+
+				customRole, err := customRoleWatcher.ConvertUnstructuredToCustomRole(obj)
+				if err != nil {
+					klog.Errorf("Failed to convert unstructured object to CustomRole: %v", err)
+					continue
+				}
+
+				customRoleWatcher.ProcessClusterRoles(customRole, clustersConfig)
+				customRoleWatcher.ProcessBindings(customRole, clustersConfig)
+			}
+
+			rebuildAllAuthorizers(clustersConfig)
+
 			// Initialise proxy with OIDC token authenticator
 			p, err := proxy.New(clustersConfig, opts.OIDCAuthentication, opts.Audit,
 				secureServingInfo, proxyConfig)
@@ -246,4 +272,16 @@ func clusterConfigValidation(clusterConfig []*proxy.ClusterConfig) error {
 		clusterNames[cluster.Name] = true
 	}
 	return nil
+}
+
+func rebuildAllAuthorizers(clusters []*proxy.ClusterConfig) {
+	for _, c := range clusters {
+		_, staticRoles := rbacvalidation.NewTestRuleResolver(
+			c.RBACConfig.Roles,
+			c.RBACConfig.RoleBindings,
+			c.RBACConfig.ClusterRoles,
+			c.RBACConfig.ClusterRoleBindings,
+		)
+		c.Authorizer = util.NewAuthorizer(staticRoles)
+	}
 }
