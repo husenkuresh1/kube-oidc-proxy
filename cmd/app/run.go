@@ -15,6 +15,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
 	"github.com/Improwised/kube-oidc-proxy/pkg/probe"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy"
+	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/crd"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/rbac"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/tokenreview"
@@ -157,6 +158,15 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 					}
 				}
 			}
+
+			customRoleWatcher, err := crd.NewCustomRoleWatcher()
+			if err != nil {
+				return err
+			}
+
+			customRoleWatcher.AddEventHandler()
+
+			go customRoleWatcher.Informer.Run(stopCh)
 
 			// Initialise proxy with OIDC token authenticator
 			p, err := proxy.New(clustersConfig, opts.OIDCAuthentication, opts.Audit,
