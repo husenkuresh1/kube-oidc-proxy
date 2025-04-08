@@ -22,7 +22,6 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
-	rbacvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
 func NewRunCommand(stopCh <-chan struct{}) *cobra.Command {
@@ -165,12 +164,10 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				}
 			}
 
-			customRoleWatcher, err := crd.NewCustomRoleWatcher()
+			customRoleWatcher, err := crd.NewCustomRoleWatcher(clustersConfig)
 			if err != nil {
 				return err
 			}
-
-			customRoleWatcher.AddEventHandler()
 
 			go customRoleWatcher.Informer.Run(stopCh)
 
@@ -188,11 +185,10 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 					continue
 				}
 
-				customRoleWatcher.ProcessClusterRoles(customRole, clustersConfig)
-				customRoleWatcher.ProcessBindings(customRole, clustersConfig)
+				customRoleWatcher.ProcessClusterRoles(customRole)
+				customRoleWatcher.ProcessBindings(customRole)
 			}
-
-			rebuildAllAuthorizers(clustersConfig)
+			customRoleWatcher.RebuildAllAuthorizers()
 
 			// Initialise proxy with OIDC token authenticator
 			p, err := proxy.New(clustersConfig, opts.OIDCAuthentication, opts.Audit,
@@ -272,16 +268,4 @@ func clusterConfigValidation(clusterConfig []*proxy.ClusterConfig) error {
 		clusterNames[cluster.Name] = true
 	}
 	return nil
-}
-
-func rebuildAllAuthorizers(clusters []*proxy.ClusterConfig) {
-	for _, c := range clusters {
-		_, staticRoles := rbacvalidation.NewTestRuleResolver(
-			c.RBACConfig.Roles,
-			c.RBACConfig.RoleBindings,
-			c.RBACConfig.ClusterRoles,
-			c.RBACConfig.ClusterRoleBindings,
-		)
-		c.Authorizer = util.NewAuthorizer(staticRoles)
-	}
 }

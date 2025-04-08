@@ -1,8 +1,11 @@
+// Copyright Jetstack Ltd. See LICENSE for details.
+
 package crd
 
 import (
 	"fmt"
 
+	"github.com/Improwised/kube-oidc-proxy/constants"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy"
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,12 +23,12 @@ func (ctrl *CustomRoleWatcher) ConvertUnstructuredToCustomRole(obj interface{}) 
 	return &customRole, nil
 }
 
-func (ctrl *CustomRoleWatcher) ProcessClusterRoles(customRole *CustomRole, clusters []*proxy.ClusterConfig) {
+func (ctrl *CustomRoleWatcher) ProcessClusterRoles(customRole *CustomRole) {
 	for _, roleSpec := range customRole.Spec.Roles {
-		targetClusters := determineTargetClusters(roleSpec, clusters)
-		clusterRole := createClusterRole(roleSpec)
+		targetClusters := determineTargetClusters(roleSpec, ctrl.clusters)
+		clusterRole := createClusterRole(roleSpec, customRole.Name)
 
-		applyToClusters(targetClusters, clusters, func(c *proxy.ClusterConfig) {
+		applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
 			c.RBACConfig.ClusterRoles = append(c.RBACConfig.ClusterRoles, clusterRole)
 		})
 	}
@@ -46,27 +49,30 @@ func getAllClusterNames(clusters []*proxy.ClusterConfig) []string {
 	return names
 }
 
-func createClusterRole(roleSpec RoleSpec) *v1.ClusterRole {
+func createClusterRole(roleSpec RoleSpec, customRoleName string) *v1.ClusterRole {
 	return &v1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{Name: roleSpec.Name},
-		Rules:      convertRules(roleSpec.Rules),
+		ObjectMeta: metav1.ObjectMeta{Name: roleSpec.Name,
+			Annotations: map[string]string{
+				fmt.Sprintf("%s/managed-by", constants.CRDGroup): customRoleName,
+			}},
+		Rules: convertRules(roleSpec.Rules),
 	}
 }
 
-func (ctrl *CustomRoleWatcher) ProcessBindings(customRole *CustomRole, clusters []*proxy.ClusterConfig) {
+func (ctrl *CustomRoleWatcher) ProcessBindings(customRole *CustomRole) {
 	for _, rbSpec := range customRole.Spec.RoleBindings {
 		roleSpec := findRoleSpec(rbSpec.RoleRef, customRole)
 		if roleSpec == nil {
 			continue
 		}
 
-		targetClusters := determineTargetClusters(*roleSpec, clusters)
+		targetClusters := determineTargetClusters(*roleSpec, ctrl.clusters)
 		subjects := convertSubjects(rbSpec.Subjects)
 
 		if len(roleSpec.Namespaces) > 0 {
-			createNamespacedBindings(*roleSpec, rbSpec, subjects, targetClusters, clusters)
+			createNamespacedBindings(customRole.Name, *roleSpec, rbSpec, subjects, targetClusters, ctrl.clusters)
 		} else {
-			createClusterWideBindings(rbSpec, roleSpec.Name, subjects, targetClusters, clusters)
+			createClusterWideBindings(customRole.Name, rbSpec, roleSpec.Name, subjects, targetClusters, ctrl.clusters)
 		}
 	}
 }
@@ -81,7 +87,7 @@ func findRoleSpec(roleName string, customRole *CustomRole) *RoleSpec {
 	return nil
 }
 
-func createNamespacedBindings(roleSpec RoleSpec, rbSpec RoleBindingSpec,
+func createNamespacedBindings(customRoleName string, roleSpec RoleSpec, rbSpec RoleBindingSpec,
 	subjects []v1.Subject, targetClusters []string, clusters []*proxy.ClusterConfig) {
 
 	for _, ns := range roleSpec.Namespaces {
@@ -89,6 +95,9 @@ func createNamespacedBindings(roleSpec RoleSpec, rbSpec RoleBindingSpec,
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      rbSpec.Name,
 				Namespace: ns,
+				Annotations: map[string]string{
+					fmt.Sprintf("%s/managed-by", constants.CRDGroup): customRoleName,
+				},
 			},
 			RoleRef: v1.RoleRef{
 				APIGroup: "rbac.authorization.k8s.io",
@@ -104,11 +113,15 @@ func createNamespacedBindings(roleSpec RoleSpec, rbSpec RoleBindingSpec,
 	}
 }
 
-func createClusterWideBindings(rbSpec RoleBindingSpec, roleName string,
+func createClusterWideBindings(customRoleName string, rbSpec RoleBindingSpec, roleName string,
 	subjects []v1.Subject, targetClusters []string, clusters []*proxy.ClusterConfig) {
 
 	crb := &v1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{Name: rbSpec.Name},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: rbSpec.Name,
+			Annotations: map[string]string{
+				fmt.Sprintf("%s/managed-by", constants.CRDGroup): customRoleName,
+			}},
 		RoleRef: v1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",
 			Kind:     "ClusterRole",
