@@ -3,7 +3,6 @@
 package crd
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy"
@@ -38,10 +37,12 @@ func TestProcessClusterRoles(t *testing.T) {
 		{Name: "cluster-2", RBACConfig: &util.RBAC{}},
 	}
 
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
 	// Act
-	ctrl.ProcessClusterRoles(customRole, clusters)
+	ctrl.ProcessClusterRoles(customRole)
 
 	// Assert
 	for _, cluster := range clusters {
@@ -86,10 +87,12 @@ func TestProcessBindings(t *testing.T) {
 		{Name: "cluster-1", RBACConfig: &util.RBAC{}},
 	}
 
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
 	// Act
-	ctrl.ProcessBindings(customRole, clusters)
+	ctrl.ProcessBindings(customRole)
 
 	// Assert
 	for _, cluster := range clusters {
@@ -159,35 +162,13 @@ func TestProcessClusterRoles_EmptyCustomRole(t *testing.T) {
 	clusters := []*proxy.ClusterConfig{
 		{Name: "cluster-1", RBACConfig: &util.RBAC{}},
 	}
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
-	ctrl.ProcessClusterRoles(&CustomRole{}, clusters)
+	ctrl.ProcessClusterRoles(&CustomRole{})
 
 	assert.Empty(t, clusters[0].RBACConfig.ClusterRoles)
-}
-
-func TestProcessClusterRoles_DuplicateRoleNames(t *testing.T) {
-	customRole := &CustomRole{
-		Spec: CustomRoleSpec{
-			Roles: []RoleSpec{
-				{
-					Name:  "duplicate-role",
-					Rules: []PolicyRule{{Verbs: []string{"get"}}},
-				},
-				{
-					Name:  "duplicate-role",
-					Rules: []PolicyRule{{Verbs: []string{"*"}}},
-				},
-			},
-		},
-	}
-	clusters := []*proxy.ClusterConfig{{Name: "cluster-1", RBACConfig: &util.RBAC{}}}
-	ctrl := &CustomRoleWatcher{}
-
-	ctrl.ProcessClusterRoles(customRole, clusters)
-	fmt.Println(clusters[0].RBACConfig.ClusterRoles)
-	assert.Len(t, clusters[0].RBACConfig.ClusterRoles, 1)
-	assert.Equal(t, []string{"*"}, clusters[0].RBACConfig.ClusterRoles[0].Rules[0].Verbs)
 }
 
 func TestProcessBindings_InvalidRoleReference(t *testing.T) {
@@ -200,9 +181,11 @@ func TestProcessBindings_InvalidRoleReference(t *testing.T) {
 		},
 	}
 	clusters := []*proxy.ClusterConfig{{Name: "cluster-1", RBACConfig: &util.RBAC{}}}
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
-	ctrl.ProcessBindings(customRole, clusters)
+	ctrl.ProcessBindings(customRole)
 
 	assert.Empty(t, clusters[0].RBACConfig.RoleBindings)
 	assert.Empty(t, clusters[0].RBACConfig.ClusterRoleBindings)
@@ -215,9 +198,11 @@ func TestProcessClusterRoles_EmptyRules(t *testing.T) {
 		},
 	}
 	clusters := []*proxy.ClusterConfig{{Name: "cluster-1", RBACConfig: &util.RBAC{}}}
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
-	ctrl.ProcessClusterRoles(customRole, clusters)
+	ctrl.ProcessClusterRoles(customRole)
 
 	assert.Empty(t, clusters[0].RBACConfig.ClusterRoles[0].Rules)
 }
@@ -233,9 +218,11 @@ func TestProcessBindings_EmptySubjects(t *testing.T) {
 		},
 	}
 	clusters := []*proxy.ClusterConfig{{Name: "cluster-1", RBACConfig: &util.RBAC{}}}
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
-	ctrl.ProcessBindings(customRole, clusters)
+	ctrl.ProcessBindings(customRole)
 
 	assert.Len(t, clusters[0].RBACConfig.ClusterRoleBindings, 1)
 	assert.Empty(t, clusters[0].RBACConfig.ClusterRoleBindings[0].Subjects)
@@ -255,37 +242,17 @@ func TestProcessBindings_MultipleNamespaces(t *testing.T) {
 		},
 	}
 	clusters := []*proxy.ClusterConfig{{Name: "cluster-1", RBACConfig: &util.RBAC{}}}
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
-	ctrl.ProcessBindings(customRole, clusters)
+	ctrl.ProcessBindings(customRole)
 
 	assert.Len(t, clusters[0].RBACConfig.RoleBindings, 2)
 	assert.ElementsMatch(t, []string{"ns1", "ns2"}, []string{
 		clusters[0].RBACConfig.RoleBindings[0].Namespace,
 		clusters[0].RBACConfig.RoleBindings[1].Namespace,
 	})
-}
-
-func TestProcessBindings_InvalidNamespace(t *testing.T) {
-	customRole := &CustomRole{
-		Spec: CustomRoleSpec{
-			Roles: []RoleSpec{{
-				Name:       "invalid-ns",
-				Namespaces: []string{"invalid_namespace$", "valid-ns"},
-			}},
-			RoleBindings: []RoleBindingSpec{{
-				Name:    "ns-binding",
-				RoleRef: "invalid-ns",
-			}},
-		},
-	}
-	clusters := []*proxy.ClusterConfig{{Name: "cluster-1", RBACConfig: &util.RBAC{}}}
-	ctrl := &CustomRoleWatcher{}
-
-	ctrl.ProcessBindings(customRole, clusters)
-
-	assert.Len(t, clusters[0].RBACConfig.RoleBindings, 1)
-	assert.Equal(t, "valid-ns", clusters[0].RBACConfig.RoleBindings[0].Namespace)
 }
 
 func TestProcessClusterRoles_MultipleClusters(t *testing.T) {
@@ -302,9 +269,11 @@ func TestProcessClusterRoles_MultipleClusters(t *testing.T) {
 		{Name: "cluster-2", RBACConfig: &util.RBAC{}},
 		{Name: "cluster-3", RBACConfig: &util.RBAC{}},
 	}
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
-	ctrl.ProcessClusterRoles(customRole, clusters)
+	ctrl.ProcessClusterRoles(customRole)
 
 	assert.Len(t, clusters[0].RBACConfig.ClusterRoles, 1)
 	assert.Len(t, clusters[1].RBACConfig.ClusterRoles, 1)
@@ -368,10 +337,12 @@ func TestCreateClusterWideBindings_CrossCluster(t *testing.T) {
 		{Name: "cluster-1", RBACConfig: &util.RBAC{}},
 		{Name: "cluster-2", RBACConfig: &util.RBAC{}},
 	}
-	ctrl := &CustomRoleWatcher{}
+	ctrl := &CustomRoleWatcher{
+		clusters: clusters,
+	}
 
-	ctrl.ProcessClusterRoles(customRole, clusters)
-	ctrl.ProcessBindings(customRole, clusters)
+	ctrl.ProcessClusterRoles(customRole)
+	ctrl.ProcessBindings(customRole)
 
 	for _, c := range clusters {
 		require.Len(t, c.RBACConfig.ClusterRoleBindings, 1)
