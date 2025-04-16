@@ -43,7 +43,7 @@ var defalutRole = map[string]v1.PolicyRule{
 	},
 }
 
-func LoadRBAC(RBACConfig util.RBAC, cluster *proxy.ClusterConfig) error {
+func LoadRBAC(cluster *proxy.ClusterConfig) error {
 	// Watch for namespace
 	// if namespace is created then create role and rolebinding
 	watchNamespace, err := cluster.Kubeclient.CoreV1().Namespaces().Watch(context.Background(), apisv1.ListOptions{Watch: true})
@@ -53,7 +53,7 @@ func LoadRBAC(RBACConfig util.RBAC, cluster *proxy.ClusterConfig) error {
 
 	for roleName, role := range defalutRole {
 		// Create ClusterRole
-		RBACConfig.ClusterRoles = append(RBACConfig.ClusterRoles, &v1.ClusterRole{
+		cluster.RBACConfig.ClusterRoles = append(cluster.RBACConfig.ClusterRoles, &v1.ClusterRole{
 			TypeMeta: apisv1.TypeMeta{
 				Kind:       "ClusterRole",
 				APIVersion: "rbac.authorization.k8s.io/v1",
@@ -64,7 +64,7 @@ func LoadRBAC(RBACConfig util.RBAC, cluster *proxy.ClusterConfig) error {
 			Rules: []v1.PolicyRule{role},
 		})
 		// Create ClusterRoleBinding
-		RBACConfig.ClusterRoleBindings = append(RBACConfig.ClusterRoleBindings, &v1.ClusterRoleBinding{
+		cluster.RBACConfig.ClusterRoleBindings = append(cluster.RBACConfig.ClusterRoleBindings, &v1.ClusterRoleBinding{
 			TypeMeta: apisv1.TypeMeta{
 				Kind:       "ClusterRoleBinding",
 				APIVersion: "rbac.authorization.k8s.io/v1",
@@ -93,7 +93,7 @@ func LoadRBAC(RBACConfig util.RBAC, cluster *proxy.ClusterConfig) error {
 			case watch.Added:
 				for role, policy := range defalutRole {
 					// Create Role
-					RBACConfig.Roles = append(RBACConfig.Roles, &v1.Role{
+					cluster.RBACConfig.Roles = append(cluster.RBACConfig.Roles, &v1.Role{
 						TypeMeta: apisv1.TypeMeta{
 							Kind:       "Role",
 							APIVersion: "rbac.authorization.k8s.io/v1",
@@ -105,7 +105,7 @@ func LoadRBAC(RBACConfig util.RBAC, cluster *proxy.ClusterConfig) error {
 						Rules: []v1.PolicyRule{policy},
 					})
 					// Create RoleBinding
-					RBACConfig.RoleBindings = append(RBACConfig.RoleBindings, &v1.RoleBinding{
+					cluster.RBACConfig.RoleBindings = append(cluster.RBACConfig.RoleBindings, &v1.RoleBinding{
 						TypeMeta: apisv1.TypeMeta{
 							Kind:       "RoleBinding",
 							APIVersion: "rbac.authorization.k8s.io/v1",
@@ -131,15 +131,15 @@ func LoadRBAC(RBACConfig util.RBAC, cluster *proxy.ClusterConfig) error {
 			case watch.Deleted:
 				for role := range defalutRole {
 					// Delete Role
-					for i, r := range RBACConfig.Roles {
+					for i, r := range cluster.RBACConfig.Roles {
 						if r.Name == fmt.Sprintf("%s:%s:%s", cluster.Name, role, e.Object.(*corev1.Namespace).Name) {
-							RBACConfig.Roles = append(RBACConfig.Roles[:i], RBACConfig.Roles[i+1:]...)
+							cluster.RBACConfig.Roles = append(cluster.RBACConfig.Roles[:i], cluster.RBACConfig.Roles[i+1:]...)
 						}
 					}
 					// Delete RoleBinding
-					for i, r := range RBACConfig.RoleBindings {
+					for i, r := range cluster.RBACConfig.RoleBindings {
 						if r.Name == fmt.Sprintf("%s:%s:%s", cluster.Name, role, e.Object.(*corev1.Namespace).Name) {
-							RBACConfig.RoleBindings = append(RBACConfig.RoleBindings[:i], RBACConfig.RoleBindings[i+1:]...)
+							cluster.RBACConfig.RoleBindings = append(cluster.RBACConfig.RoleBindings[:i], cluster.RBACConfig.RoleBindings[i+1:]...)
 						}
 					}
 				}
@@ -147,7 +147,7 @@ func LoadRBAC(RBACConfig util.RBAC, cluster *proxy.ClusterConfig) error {
 				continue
 
 			}
-			_, StaticRoles := rbacvalidation.NewTestRuleResolver(RBACConfig.Roles, RBACConfig.RoleBindings, RBACConfig.ClusterRoles, RBACConfig.ClusterRoleBindings)
+			_, StaticRoles := rbacvalidation.NewTestRuleResolver(cluster.RBACConfig.Roles, cluster.RBACConfig.RoleBindings, cluster.RBACConfig.ClusterRoles, cluster.RBACConfig.ClusterRoleBindings)
 			cluster.Authorizer = util.NewAuthorizer(StaticRoles)
 
 		}

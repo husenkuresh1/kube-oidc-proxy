@@ -143,11 +143,11 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			}
 
-			for clusterName, RBACConfig := range clustersRoleConfigMap {
+			for clusterName := range clustersRoleConfigMap {
 				for _, cluster := range clustersConfig {
 					if cluster.Name == clusterName {
 						isRBACLoded[cluster.Name] = true
-						err := rbac.LoadRBAC(RBACConfig, cluster)
+						err := rbac.LoadRBAC(cluster)
 						if err != nil {
 							return err
 						}
@@ -157,7 +157,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			for _, cluster := range clustersConfig {
 				if !isRBACLoded[cluster.Name] {
-					err := rbac.LoadRBAC(util.RBAC{}, cluster)
+					err := rbac.LoadRBAC(cluster)
 					if err != nil {
 						return err
 					}
