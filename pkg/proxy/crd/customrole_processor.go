@@ -29,7 +29,21 @@ func (ctrl *CustomRoleWatcher) ProcessClusterRoles(customRole *CustomRole) {
 		clusterRole := createClusterRole(roleSpec, customRole.Name)
 
 		applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
-			c.RBACConfig.ClusterRoles = append(c.RBACConfig.ClusterRoles, clusterRole)
+			// Use a map to deduplicate roles by name
+			roleMap := make(map[string]*v1.ClusterRole)
+			for _, existing := range c.RBACConfig.ClusterRoles {
+				roleMap[existing.Name] = existing
+			}
+
+			// Add/overwrite with new role
+			roleMap[clusterRole.Name] = clusterRole
+
+			// Convert back to slice
+			result := make([]*v1.ClusterRole, 0, len(roleMap))
+			for _, role := range roleMap {
+				result = append(result, role)
+			}
+			c.RBACConfig.ClusterRoles = result
 		})
 	}
 }
