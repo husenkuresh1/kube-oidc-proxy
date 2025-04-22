@@ -143,10 +143,14 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			}
 
-			for clusterName := range clustersRoleConfigMap {
+			for clusterName, RBACConfig := range clustersRoleConfigMap {
 				for _, cluster := range clustersConfig {
 					if cluster.Name == clusterName {
 						isRBACLoded[cluster.Name] = true
+						cluster.RBACConfig.Roles = append(cluster.RBACConfig.Roles, RBACConfig.Roles...)
+						cluster.RBACConfig.ClusterRoles = append(cluster.RBACConfig.ClusterRoles, RBACConfig.ClusterRoles...)
+						cluster.RBACConfig.ClusterRoleBindings = append(cluster.RBACConfig.ClusterRoleBindings, RBACConfig.ClusterRoleBindings...)
+						cluster.RBACConfig.RoleBindings = append(cluster.RBACConfig.RoleBindings, RBACConfig.RoleBindings...)
 						err := rbac.LoadRBAC(cluster)
 						if err != nil {
 							return err
@@ -165,30 +169,29 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			customRoleWatcher, err := crd.NewCustomRoleWatcher(clustersConfig)
-			if err != nil {
-				return err
-			}
+			if err == nil {
+				// return err
+				go customRoleWatcher.Informer.Run(stopCh)
 
-			go customRoleWatcher.Informer.Run(stopCh)
-
-			if !cache.WaitForCacheSync(stopCh, customRoleWatcher.Informer.HasSynced) {
-				klog.Error("Timed out waiting for caches to sync")
-			}
-
-			existingObjects := customRoleWatcher.Informer.GetStore().List()
-
-			for _, obj := range existingObjects {
-
-				customRole, err := customRoleWatcher.ConvertUnstructuredToCustomRole(obj)
-				if err != nil {
-					klog.Errorf("Failed to convert unstructured object to CustomRole: %v", err)
-					continue
+				if !cache.WaitForCacheSync(stopCh, customRoleWatcher.Informer.HasSynced) {
+					klog.Error("Timed out waiting for caches to sync")
 				}
 
-				customRoleWatcher.ProcessClusterRoles(customRole)
-				customRoleWatcher.ProcessBindings(customRole)
+				existingObjects := customRoleWatcher.Informer.GetStore().List()
+
+				for _, obj := range existingObjects {
+
+					customRole, err := customRoleWatcher.ConvertUnstructuredToCustomRole(obj)
+					if err != nil {
+						klog.Errorf("Failed to convert unstructured object to CustomRole: %v", err)
+						continue
+					}
+
+					customRoleWatcher.ProcessClusterRoles(customRole)
+					customRoleWatcher.ProcessBindings(customRole)
+				}
+				customRoleWatcher.RebuildAllAuthorizers()
 			}
-			customRoleWatcher.RebuildAllAuthorizers()
 
 			// Initialise proxy with OIDC token authenticator
 			p, err := proxy.New(clustersConfig, opts.OIDCAuthentication, opts.Audit,

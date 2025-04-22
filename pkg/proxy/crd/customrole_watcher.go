@@ -4,6 +4,7 @@ package crd
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Improwised/kube-oidc-proxy/constants"
@@ -113,7 +114,7 @@ func NewCustomRoleWatcher(clusters []*proxy.ClusterConfig) (*CustomRoleWatcher, 
 }
 
 func buildConfiguration() (*rest.Config, error) {
-	kubeconfig := "/home/husen.kureshi/.kube/config"
+	kubeconfig := os.Getenv("KUBECONFIG")
 	var clusterConfig *rest.Config
 	var err error
 	if kubeconfig != "" {
@@ -241,7 +242,7 @@ func (ctrl *CustomRoleWatcher) RebuildAllAuthorizers() {
 			c.RBACConfig.ClusterRoles,
 			c.RBACConfig.ClusterRoleBindings,
 		)
-		klog.Infof("Rebuilding authorizer for cluster: %s", c.Name)
+		klog.V(5).Infof("Rebuilding authorizer for cluster: %s", c.Name)
 		c.Authorizer = util.NewAuthorizer(staticRoles)
 	}
 }
