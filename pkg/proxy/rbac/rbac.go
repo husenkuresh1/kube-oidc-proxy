@@ -36,7 +36,7 @@ var defalutRole = map[string]v1.PolicyRule{
 	},
 	"developer-exec-portforward": {
 		Verbs:     []string{"get", "list", "watch", "create"},
-		APIGroups: []string{""},
+		APIGroups: []string{"", "metrics.k8s.io"},
 		Resources: []string{"pods", "pods/log", "pods/portforward", "pods/exec"},
 	},
 }
