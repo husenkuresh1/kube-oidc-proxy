@@ -160,7 +160,7 @@ func applyToClusters(targetClusters []string, allClusters []*proxy.ClusterConfig
 	}
 }
 
-func convertRules(rules []PolicyRule) []v1.PolicyRule {
+func convertRules(rules []v1.PolicyRule) []v1.PolicyRule {
 	k8sRules := make([]v1.PolicyRule, 0, len(rules))
 	for _, r := range rules {
 		k8sRules = append(k8sRules, v1.PolicyRule{
@@ -172,7 +172,7 @@ func convertRules(rules []PolicyRule) []v1.PolicyRule {
 	return k8sRules
 }
 
-func convertSubjects(subjects []Subject) []v1.Subject {
+func convertSubjects(subjects []v1.Subject) []v1.Subject {
 	k8sSubjects := make([]v1.Subject, 0, len(subjects))
 	for _, s := range subjects {
 		k8sSubjects = append(k8sSubjects, v1.Subject{

@@ -157,7 +157,6 @@ func (a *Audit) WithCustomAuditLog(handler http.Handler) http.Handler {
 		if !ok {
 			klog.V(4).Info("No user info found in the request")
 		}
-
 		a.SendAuditLog(Log{
 			ClusterName: clusterName,
 			// user info
@@ -193,7 +192,14 @@ func (a *Audit) SendAuditLog(log Log) {
 	r, err := a.client.R().SetBody(log).Post("/api/v1/k8s-audit-log/webhook")
 	if err != nil {
 		klog.Errorf("Error sending audit log to webhook: %v", err)
+		return
 	}
+
+	if r == nil {
+		klog.Errorf("Error sending audit log to webhook: response is nil")
+		return
+	}
+
 	if r.IsError() || r.StatusCode() != http.StatusOK {
 		klog.Errorf("Error sending audit log to webhook: %v", r.String())
 	}

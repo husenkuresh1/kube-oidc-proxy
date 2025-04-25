@@ -20,7 +20,7 @@ func TestProcessClusterRoles(t *testing.T) {
 			Roles: []RoleSpec{
 				{
 					Name: "test-cluster-role",
-					Rules: []PolicyRule{
+					Rules: []v1.PolicyRule{
 						{
 							APIGroups: []string{""},
 							Resources: []string{"pods"},
@@ -72,7 +72,7 @@ func TestProcessBindings(t *testing.T) {
 				{
 					Name:    "test-binding",
 					RoleRef: "test-role",
-					Subjects: []Subject{
+					Subjects: []v1.Subject{
 						{
 							Kind: "User",
 							Name: "test-user",
@@ -296,7 +296,7 @@ func TestConvertUnstructuredToCustomRole_InvalidData(t *testing.T) {
 }
 
 func TestConvertSubjects_ServiceAccountValidation(t *testing.T) {
-	subjects := []Subject{
+	subjects := []v1.Subject{
 		{Kind: "ServiceAccount", Name: "default"},
 		{Kind: "User", Name: "test-user"},
 	}

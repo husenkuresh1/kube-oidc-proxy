@@ -45,17 +45,12 @@ type RoleSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Name       string       `json:"name"`
-	Type       RoleType     `json:"type"`
-	Clusters   []string     `json:"clusters,omitempty"`
-	Namespaces []string     `json:"namespaces,omitempty"`
-	BaseRoles  []string     `json:"baseRoles,omitempty"`
-	Rules      []PolicyRule `json:"rules,omitempty"`
-}
-type PolicyRule struct {
-	APIGroups []string `json:"apiGroups"`
-	Resources []string `json:"resources"`
-	Verbs     []string `json:"verbs"`
+	Name       string          `json:"name"`
+	Type       RoleType        `json:"type"`
+	Clusters   []string        `json:"clusters,omitempty"`
+	Namespaces []string        `json:"namespaces,omitempty"`
+	BaseRoles  []string        `json:"baseRoles,omitempty"`
+	Rules      []v1.PolicyRule `json:"rules,omitempty"`
 }
 
 type RoleType string
@@ -69,14 +64,8 @@ const (
 type RoleBindingSpec struct {
 	Name       string       `json:"name"`
 	RoleRef    string       `json:"roleRef"`
-	Subjects   []Subject    `json:"subjects"`
+	Subjects   []v1.Subject `json:"subjects"`
 	Expiration *metav1.Time `json:"expiration,omitempty"`
-}
-
-type Subject struct {
-	Kind     string `json:"kind"`
-	Name     string `json:"name"`
-	APIGroup string `json:"apiGroup,omitempty"`
 }
 
 // CustomRoleStatus defines the observed state of CustomRole.
@@ -115,6 +104,10 @@ func NewCustomRoleWatcher(clusters []*proxy.ClusterConfig) (*CustomRoleWatcher, 
 
 func buildConfiguration() (*rest.Config, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
+	fmt.Println("kubeconfig", kubeconfig)
+	if kubeconfig == "" {
+		kubeconfig = "/home/husen.kureshi/.kube/config"
+	}
 	var clusterConfig *rest.Config
 	var err error
 	if kubeconfig != "" {
@@ -242,6 +235,15 @@ func (ctrl *CustomRoleWatcher) RebuildAllAuthorizers() {
 			c.RBACConfig.ClusterRoles,
 			c.RBACConfig.ClusterRoleBindings,
 		)
+
+		// fmt.Println("====================Cluster", c.Name, "====================")
+		// if jsonData, err := json.MarshalIndent(c.RBACConfig, "", "  "); err != nil {
+		// 	fmt.Println("Error:", err)
+		// } else {
+		// 	fmt.Println(string(jsonData))
+		// }
+		// fmt.Println("============================================")
+
 		klog.V(5).Infof("Rebuilding authorizer for cluster: %s", c.Name)
 		c.Authorizer = util.NewAuthorizer(staticRoles)
 	}

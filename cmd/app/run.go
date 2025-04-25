@@ -191,6 +191,8 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 					customRoleWatcher.ProcessBindings(customRole)
 				}
 				customRoleWatcher.RebuildAllAuthorizers()
+			} else {
+				klog.Error("Failed to create custom role watcher: ", err)
 			}
 
 			// Initialise proxy with OIDC token authenticator
