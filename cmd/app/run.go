@@ -15,6 +15,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
 	"github.com/Improwised/kube-oidc-proxy/pkg/probe"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy"
+	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/crd"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/rbac"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/tokenreview"
@@ -156,6 +157,14 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 						return err
 					}
 				}
+			}
+
+			capiRbacWatcher, err := crd.NewCAPIRbacWatcher(clustersConfig)
+
+			if err == nil {
+				fmt.Println("Starting CAPI RBAC watcher", capiRbacWatcher)
+			} else {
+				fmt.Println("Error starting CAPI RBAC watcher", err)
 			}
 
 			// Initialise proxy with OIDC token authenticator
