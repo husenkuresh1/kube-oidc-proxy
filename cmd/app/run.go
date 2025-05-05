@@ -146,7 +146,11 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				for _, cluster := range clustersConfig {
 					if cluster.Name == clusterName {
 						isRBACLoded[cluster.Name] = true
-						err := rbac.LoadRBAC(RBACConfig, cluster)
+						cluster.RBACConfig.Roles = append(cluster.RBACConfig.Roles, RBACConfig.Roles...)
+						cluster.RBACConfig.ClusterRoles = append(cluster.RBACConfig.ClusterRoles, RBACConfig.ClusterRoles...)
+						cluster.RBACConfig.ClusterRoleBindings = append(cluster.RBACConfig.ClusterRoleBindings, RBACConfig.ClusterRoleBindings...)
+						cluster.RBACConfig.RoleBindings = append(cluster.RBACConfig.RoleBindings, RBACConfig.RoleBindings...)
+						err := rbac.LoadRBAC(cluster)
 						if err != nil {
 							return err
 						}
@@ -156,7 +160,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			for _, cluster := range clustersConfig {
 				if !isRBACLoded[cluster.Name] {
-					err := rbac.LoadRBAC(util.RBAC{}, cluster)
+					err := rbac.LoadRBAC(cluster)
 					if err != nil {
 						return err
 					}
@@ -164,12 +168,11 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			capiRbacWatcher, err := crd.NewCAPIRbacWatcher(clustersConfig)
-
-			if err == nil {
+			if err != nil {
+				fmt.Println("Error starting CAPI RBAC watcher", err)
+			} else {
 				klog.V(5).Info("Starting CAPI RBAC watcher", capiRbacWatcher)
 				capiRbacWatcher.Start(stopCh)
-
-				capiRbacWatcher.RegisterEventHandlers()
 
 				existingCAPIRoles := capiRbacWatcher.CAPIRoleInformer.GetStore().List()
 
@@ -224,9 +227,6 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				}
 
 				capiRbacWatcher.RebuildAllAuthorizers()
-
-			} else {
-				fmt.Println("Error starting CAPI RBAC watcher", err)
 			}
 
 			// Initialise proxy with OIDC token authenticator

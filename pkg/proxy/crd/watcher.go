@@ -42,13 +42,17 @@ func NewCAPIRbacWatcher(clusters []*proxy.ClusterConfig) (*CAPIRbacWatcher, erro
 	capiClusterRoleInformer := factory.ForResource(CAPIClusterRoleGVR).Informer()
 	capiClusterRoleBindingInformer := factory.ForResource(CAPIClusterRoleBindingGVR).Informer()
 
-	return &CAPIRbacWatcher{
+	watcher := &CAPIRbacWatcher{
 		CAPIRoleInformer:               capiRoleInformer,
 		CAPIClusterRoleInformer:        capiClusterRoleInformer,
 		CAPIRoleBindingInformer:        capiRoleBindingInformer,
 		CAPIClusterRoleBindingInformer: capiClusterRoleBindingInformer,
 		clusters:                       clusters,
-	}, nil
+	}
+
+	watcher.RegisterEventHandlers()
+
+	return watcher, nil
 }
 
 func buildConfiguration() (*rest.Config, error) {
