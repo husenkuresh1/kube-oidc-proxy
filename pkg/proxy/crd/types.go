@@ -23,12 +23,18 @@ type CommonRoleSpec struct {
 	TargetClusters []string        `json:"targetClusters,omitempty"`
 	Rules          []v1.PolicyRule `json:"rules,omitempty"`
 }
+type Subject struct {
+	Group          string `json:"group,omitempty"`
+	User           string `json:"user,omitempty"`
+	ServiceAccount string `json:"serviceAccount,omitempty"`
+}
 
 // CommonBindingSpec defines shared fields for role binding specifications.
 type CommonBindingSpec struct {
-	Name     string       `json:"name"`
-	RoleRef  []string     `json:"roleRef"`
-	Subjects []v1.Subject `json:"subjects"`
+	TargetClusters []string  `json:"targetClusters,omitempty"`
+	Name           string    `json:"name"`
+	RoleRef        []string  `json:"roleRef"`
+	Subjects       []Subject `json:"subjects"`
 }
 
 // CAPIClusterRoleSpec defines the desired state of CAPIClusterRole.
@@ -50,13 +56,6 @@ type CAPIClusterRole struct {
 	Status CAPIClusterRoleStatus `json:"status,omitempty"`
 }
 
-// CAPIClusterRoleList contains a list of CAPIClusterRole.
-type CAPIClusterRoleList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []CAPIClusterRole `json:"items"`
-}
-
 // CAPIClusterRoleBindingSpec defines the desired state of CAPIClusterRoleBinding.
 type CAPIClusterRoleBindingSpec struct {
 	CommonBindingSpec `json:",inline"`
@@ -74,13 +73,6 @@ type CAPIClusterRoleBinding struct {
 
 	Spec   CAPIClusterRoleBindingSpec   `json:"spec,omitempty"`
 	Status CAPIClusterRoleBindingStatus `json:"status,omitempty"`
-}
-
-// CAPIClusterRoleBindingList contains a list of CAPIClusterRoleBinding.
-type CAPIClusterRoleBindingList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []CAPIClusterRoleBinding `json:"items"`
 }
 
 // CAPIRoleSpec defines the desired state of CAPIRole.
@@ -103,15 +95,9 @@ type CAPIRole struct {
 	Status CAPIRoleStatus `json:"status,omitempty"`
 }
 
-// CAPIRoleList contains a list of CAPIRole.
-type CAPIRoleList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []CAPIRole `json:"items"`
-}
-
 // CAPIRoleBindingSpec defines the desired state of CAPIRoleBinding.
 type CAPIRoleBindingSpec struct {
+	TargetNamespaces  []string `json:"targetNamespaces,omitempty"`
 	CommonBindingSpec `json:",inline"`
 }
 
@@ -127,13 +113,6 @@ type CAPIRoleBinding struct {
 
 	Spec   CAPIRoleBindingSpec   `json:"spec,omitempty"`
 	Status CAPIRoleBindingStatus `json:"status,omitempty"`
-}
-
-// CAPIRoleBindingList contains a list of CAPIRoleBinding.
-type CAPIRoleBindingList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []CAPIRoleBinding `json:"items"`
 }
 
 var (

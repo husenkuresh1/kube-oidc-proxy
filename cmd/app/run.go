@@ -11,6 +11,7 @@ import (
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
 	"github.com/Improwised/kube-oidc-proxy/pkg/probe"
@@ -89,6 +90,9 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 					return err
 				}
 				cluster.RestConfig = r
+				if cluster.RBACConfig == nil {
+					cluster.RBACConfig = &util.RBAC{}
+				}
 			}
 
 			// Initialise token reviewer if enabled
@@ -162,7 +166,65 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			capiRbacWatcher, err := crd.NewCAPIRbacWatcher(clustersConfig)
 
 			if err == nil {
-				fmt.Println("Starting CAPI RBAC watcher", capiRbacWatcher)
+				klog.V(5).Info("Starting CAPI RBAC watcher", capiRbacWatcher)
+				capiRbacWatcher.Start(stopCh)
+
+				capiRbacWatcher.RegisterEventHandlers()
+
+				existingCAPIRoles := capiRbacWatcher.CAPIRoleInformer.GetStore().List()
+
+				for _, obj := range existingCAPIRoles {
+
+					role, err := capiRbacWatcher.ConvertUnstructuredToCAPIRole(obj)
+					if err != nil {
+						klog.Errorf("Failed to convert unstructured object to Role: %v", err)
+						continue
+					}
+
+					capiRbacWatcher.ProcessCAPIRole(role)
+				}
+
+				existingCAPIClusterRoles := capiRbacWatcher.CAPIClusterRoleInformer.GetStore().List()
+
+				for _, obj := range existingCAPIClusterRoles {
+
+					clusterRole, err := capiRbacWatcher.ConvertUnstructuredToCAPIClusterRole(obj)
+					if err != nil {
+						klog.Errorf("Failed to convert unstructured object to ClusterRole: %v", err)
+						continue
+					}
+
+					capiRbacWatcher.ProcessCAPIClusterRole(clusterRole)
+				}
+
+				existingCAPIClusterRoleBindings := capiRbacWatcher.CAPIClusterRoleBindingInformer.GetStore().List()
+
+				for _, obj := range existingCAPIClusterRoleBindings {
+
+					clusterRoleBinding, err := capiRbacWatcher.ConvertUnstructuredToCAPIClusterRoleBinding(obj)
+					if err != nil {
+						klog.Errorf("Failed to convert unstructured object to ClusterRoleBinding: %v", err)
+						continue
+					}
+
+					capiRbacWatcher.ProcessCAPIClusterRoleBinding(clusterRoleBinding)
+				}
+
+				existingCAPIRoleBindings := capiRbacWatcher.CAPIRoleBindingInformer.GetStore().List()
+
+				for _, obj := range existingCAPIRoleBindings {
+
+					roleBinding, err := capiRbacWatcher.ConvertUnstructuredToCAPIRoleBinding(obj)
+					if err != nil {
+						klog.Errorf("Failed to convert unstructured object to RoleBinding: %v", err)
+						continue
+					}
+
+					capiRbacWatcher.ProcessCAPIRoleBinding(roleBinding)
+				}
+
+				capiRbacWatcher.RebuildAllAuthorizers()
+
 			} else {
 				fmt.Println("Error starting CAPI RBAC watcher", err)
 			}
