@@ -14,40 +14,18 @@ import (
 	rbacvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
-func (ctrl *CAPIRbacWatcher) ConvertUnstructuredToCAPIRole(obj interface{}) (*CAPIRole, error) {
-	u := obj.(*unstructured.Unstructured)
-	var capiRole CAPIRole
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &capiRole); err != nil {
-		return nil, fmt.Errorf("conversion error: %w", err)
+// convertUnstructured is a generic conversion helper
+func ConvertUnstructured[T any](obj interface{}) (*T, error) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return nil, fmt.Errorf("expected unstructured object, got %T", obj)
 	}
-	return &capiRole, nil
-}
 
-func (ctrl *CAPIRbacWatcher) ConvertUnstructuredToCAPIClusterRole(obj interface{}) (*CAPIClusterRole, error) {
-	u := obj.(*unstructured.Unstructured)
-	var capiClusterRole CAPIClusterRole
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &capiClusterRole); err != nil {
-		return nil, fmt.Errorf("conversion error: %w", err)
+	var result T
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &result); err != nil {
+		return nil, fmt.Errorf("conversion failed: %w", err)
 	}
-	return &capiClusterRole, nil
-}
-
-func (ctrl *CAPIRbacWatcher) ConvertUnstructuredToCAPIClusterRoleBinding(obj interface{}) (*CAPIClusterRoleBinding, error) {
-	u := obj.(*unstructured.Unstructured)
-	var capiClusterRoleBinding CAPIClusterRoleBinding
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &capiClusterRoleBinding); err != nil {
-		return nil, fmt.Errorf("conversion error: %w", err)
-	}
-	return &capiClusterRoleBinding, nil
-}
-
-func (ctrl *CAPIRbacWatcher) ConvertUnstructuredToCAPIRoleBinding(obj interface{}) (*CAPIRoleBinding, error) {
-	u := obj.(*unstructured.Unstructured)
-	var capiRoleBinding CAPIRoleBinding
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &capiRoleBinding); err != nil {
-		return nil, fmt.Errorf("conversion error: %w", err)
-	}
-	return &capiRoleBinding, nil
+	return &result, nil
 }
 
 func determineTargetClusters(targetClusters []string, clusters []*proxy.ClusterConfig) []string {

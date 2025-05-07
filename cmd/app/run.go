@@ -178,7 +178,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 				for _, obj := range existingCAPIRoles {
 
-					role, err := capiRbacWatcher.ConvertUnstructuredToCAPIRole(obj)
+					role, err := crd.ConvertUnstructured[crd.CAPIRole](obj)
 					if err != nil {
 						klog.Errorf("Failed to convert unstructured object to Role: %v", err)
 						continue
@@ -191,7 +191,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 				for _, obj := range existingCAPIClusterRoles {
 
-					clusterRole, err := capiRbacWatcher.ConvertUnstructuredToCAPIClusterRole(obj)
+					clusterRole, err := crd.ConvertUnstructured[crd.CAPIClusterRole](obj)
 					if err != nil {
 						klog.Errorf("Failed to convert unstructured object to ClusterRole: %v", err)
 						continue
@@ -204,7 +204,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 				for _, obj := range existingCAPIClusterRoleBindings {
 
-					clusterRoleBinding, err := capiRbacWatcher.ConvertUnstructuredToCAPIClusterRoleBinding(obj)
+					clusterRoleBinding, err := crd.ConvertUnstructured[crd.CAPIClusterRoleBinding](obj)
 					if err != nil {
 						klog.Errorf("Failed to convert unstructured object to ClusterRoleBinding: %v", err)
 						continue
@@ -217,7 +217,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 				for _, obj := range existingCAPIRoleBindings {
 
-					roleBinding, err := capiRbacWatcher.ConvertUnstructuredToCAPIRoleBinding(obj)
+					roleBinding, err := crd.ConvertUnstructured[crd.CAPIRoleBinding](obj)
 					if err != nil {
 						klog.Errorf("Failed to convert unstructured object to RoleBinding: %v", err)
 						continue

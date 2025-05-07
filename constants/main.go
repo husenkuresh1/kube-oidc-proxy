@@ -3,8 +3,13 @@ package constants
 var (
 	Group                      = "rbac.platformengineers.io"
 	Version                    = "v1"
-	CAPIClusterRoleKind        = "CAPIClusterRole"
-	CAPIClusterRoleBindingKind = "CAPIClusterRoleBinding"
-	CAPIRoleKind               = "CAPIRole"
-	CAPIRoleBindingKind        = "CAPIRoleBinding"
+	CAPIClusterRoleKind        = "capiclusterroles"
+	CAPIClusterRoleBindingKind = "capiclusterrolebindings"
+	CAPIRoleKind               = "capiroles"
+	CAPIRoleBindingKind        = "capirolebindings"
+)
+
+// test constants
+const (
+	ClusterName = "kind-cluster"
 )
