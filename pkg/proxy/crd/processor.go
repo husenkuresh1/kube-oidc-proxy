@@ -29,7 +29,7 @@ func ConvertUnstructured[T any](obj interface{}) (*T, error) {
 }
 
 func determineTargetClusters(targetClusters []string, clusters []*proxy.ClusterConfig) []string {
-	if len(targetClusters) == 0 {
+	if len(targetClusters) == 1 && targetClusters[0] == "*" {
 		return getAllClusterNames(clusters)
 	}
 	return targetClusters
