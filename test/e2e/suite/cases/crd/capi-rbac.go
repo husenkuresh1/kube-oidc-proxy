@@ -36,7 +36,6 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 			Spec: crd.CAPIRoleSpec{
 				CommonRoleSpec: crd.CommonRoleSpec{
 					Name:           "pod-reader",
-					Scope:          crd.NamespaceRole,
 					TargetClusters: []string{constants.ClusterName},
 					Rules: []v1.PolicyRule{
 						{
@@ -101,7 +100,6 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 			Spec: crd.CAPIClusterRoleSpec{
 				CommonRoleSpec: crd.CommonRoleSpec{
 					Name:           "node-reader",
-					Scope:          crd.ClusterRole,
 					TargetClusters: []string{constants.ClusterName},
 					Rules: []v1.PolicyRule{
 						{
@@ -161,7 +159,6 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 			Spec: crd.CAPIRoleSpec{
 				CommonRoleSpec: crd.CommonRoleSpec{
 					Name:           "dynamic-role",
-					Scope:          crd.NamespaceRole,
 					TargetClusters: []string{constants.ClusterName},
 					Rules:          []v1.PolicyRule{}, // No rules initially
 				},
@@ -498,6 +495,121 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 			&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "test"}},
 			metav1.CreateOptions{},
 		)
+		Expect(k8sErrors.IsForbidden(err)).To(BeTrue())
+	})
+
+	// Add these test cases to capi-rbac.go
+
+	It("should apply roles to all clusters using wildcard target", func() {
+		By("Creating CAPIRole with wildcard cluster target")
+		capiRole := &crd.CAPIRole{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "rbac.platformengineers.io/v1",
+				Kind:       "CAPIRole",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "wildcard-cluster-role",
+				Namespace: f.Namespace.Name,
+			},
+			Spec: crd.CAPIRoleSpec{
+				CommonRoleSpec: crd.CommonRoleSpec{
+					Name:           "wildcard-cluster",
+					TargetClusters: []string{"*"},
+					Rules: []v1.PolicyRule{
+						{
+							APIGroups: []string{""},
+							Resources: []string{"configmaps"},
+							Verbs:     []string{"get", "list"},
+						},
+					},
+				},
+				TargetNamespaces: []string{f.Namespace.Name},
+			},
+		}
+		err := f.Helper().CreateCRDObject(capiRole, crd.CAPIRoleGVR, f.Namespace.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating CAPIRoleBinding with wildcard cluster target")
+		capiBinding := &crd.CAPIRoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "rbac.platformengineers.io/v1",
+				Kind:       "CAPIRoleBinding",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "wildcard-cluster-binding",
+				Namespace: f.Namespace.Name,
+			},
+			Spec: crd.CAPIRoleBindingSpec{
+				CommonBindingSpec: crd.CommonBindingSpec{
+					RoleRef:        []string{"wildcard-cluster-role"},
+					Subjects:       []crd.Subject{{Group: "group-1"}},
+					TargetClusters: []string{"*"},
+				},
+				TargetNamespaces: []string{f.Namespace.Name},
+			},
+		}
+		err = f.Helper().CreateCRDObject(capiBinding, crd.CAPIRoleBindingGVR, f.Namespace.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying access with wildcard clusters")
+		Eventually(func() error {
+			_, err := f.ProxyClient.CoreV1().ConfigMaps(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
+			return err
+		}, 10*time.Second).Should(Succeed())
+	})
+
+	It("should not grant access with empty targetClusters", func() {
+		By("Creating role with empty targetClusters")
+		capiRole := &crd.CAPIRole{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "rbac.platformengineers.io/v1",
+				Kind:       "CAPIRole",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "empty-target-role",
+				Namespace: f.Namespace.Name,
+			},
+			Spec: crd.CAPIRoleSpec{
+				CommonRoleSpec: crd.CommonRoleSpec{
+					TargetClusters: []string{},
+					Rules: []v1.PolicyRule{
+						{
+							APIGroups: []string{""},
+							Resources: []string{"secrets"},
+							Verbs:     []string{"get"},
+						},
+					},
+				},
+				TargetNamespaces: []string{f.Namespace.Name},
+			},
+		}
+		err := f.Helper().CreateCRDObject(capiRole, crd.CAPIRoleGVR, f.Namespace.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating valid binding")
+		capiBinding := &crd.CAPIRoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "rbac.platformengineers.io/v1",
+				Kind:       "CAPIRoleBinding",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "empty-target-binding",
+				Namespace: f.Namespace.Name,
+			},
+			Spec: crd.CAPIRoleBindingSpec{
+				CommonBindingSpec: crd.CommonBindingSpec{
+					RoleRef:        []string{"empty-target-role"},
+					Subjects:       []crd.Subject{{Group: "group-1"}},
+					TargetClusters: []string{constants.ClusterName},
+				},
+				TargetNamespaces: []string{f.Namespace.Name},
+			},
+		}
+		err = f.Helper().CreateCRDObject(capiBinding, crd.CAPIRoleBindingGVR, f.Namespace.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying no access granted")
+		_, err = f.ProxyClient.CoreV1().Secrets(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(k8sErrors.IsForbidden(err)).To(BeTrue())
 	})
 })
