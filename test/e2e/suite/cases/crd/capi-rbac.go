@@ -238,9 +238,10 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 			},
 			Spec: crd.CAPIClusterRoleBindingSpec{
 				CommonBindingSpec: crd.CommonBindingSpec{
-					Name:     "cluster-binding",
-					RoleRef:  []string{"existing-cluster-role"},
-					Subjects: []crd.Subject{{Group: "group-1"}},
+					TargetClusters: []string{constants.ClusterName},
+					Name:           "cluster-binding",
+					RoleRef:        []string{"existing-cluster-role"},
+					Subjects:       []crd.Subject{{Group: "group-1"}},
 				},
 			},
 		}
@@ -277,6 +278,7 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 							Verbs:     []string{"get", "list"},
 						},
 					},
+					TargetClusters: []string{constants.ClusterName},
 				},
 				TargetNamespaces: []string{ns1.Name, ns2.Name},
 			},
@@ -364,6 +366,7 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 							Verbs:     []string{"get", "list"},
 						},
 					},
+					TargetClusters: []string{constants.ClusterName},
 				},
 				TargetNamespaces: []string{f.Namespace.Name},
 			},
@@ -389,6 +392,7 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 							Verbs:     []string{"list"},
 						},
 					},
+					TargetClusters: []string{constants.ClusterName},
 				},
 				TargetNamespaces: []string{f.Namespace.Name},
 			},
@@ -448,6 +452,7 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 							Verbs:     []string{"get", "list"},
 						},
 					},
+					TargetClusters: []string{constants.ClusterName},
 				},
 			},
 		}
@@ -497,8 +502,6 @@ var _ = framework.CasesDescribe("CRD CAPI-RBAC", func() {
 		)
 		Expect(k8sErrors.IsForbidden(err)).To(BeTrue())
 	})
-
-	// Add these test cases to capi-rbac.go
 
 	It("should apply roles to all clusters using wildcard target", func() {
 		By("Creating CAPIRole with wildcard cluster target")

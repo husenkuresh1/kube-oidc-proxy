@@ -88,15 +88,10 @@ spec:
                   - verbs
                   type: object
                 type: array
-              scope:
-                description: RoleScope defines the scope of a role.
-                type: string
               targetClusters:
                 items:
                   type: string
                 type: array
-            required:
-            - scope
             type: object
           status:
             description: CAPIClusterRoleStatus defines the observed state of CAPIClusterRole.
