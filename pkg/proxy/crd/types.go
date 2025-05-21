@@ -7,19 +7,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// RoleScope defines the scope of a role.
-type RoleScope string
-
-const (
-	GlobalRole    RoleScope = "Global"
-	ClusterRole   RoleScope = "Cluster"
-	NamespaceRole RoleScope = "Namespace"
-)
-
 // CommonRoleSpec defines shared fields for role specifications.
 type CommonRoleSpec struct {
 	Name           string          `json:"name"`
-	Scope          RoleScope       `json:"scope"`
 	TargetClusters []string        `json:"targetClusters,omitempty"`
 	Rules          []v1.PolicyRule `json:"rules,omitempty"`
 }

@@ -45,13 +45,13 @@ var defalutRole = map[string]v1.PolicyRule{
 func LoadRBAC(cluster *proxy.ClusterConfig) error {
 
 	// First load existing RBAC resources from the cluster
-	err := loadExistingRBAC(cluster.RBACConfig, cluster)
+	err := loadExistingRBAC(cluster)
 	if err != nil {
 		return fmt.Errorf("failed to load existing RBAC: %v", err)
 	}
 
 	// Set up watchers for RBAC resources
-	err = setupRBACWatchers(cluster.RBACConfig, cluster)
+	err = setupRBACWatchers(cluster)
 	if err != nil {
 		return fmt.Errorf("failed to setup RBAC watchers: %v", err)
 	}
@@ -159,22 +159,22 @@ func LoadRBAC(cluster *proxy.ClusterConfig) error {
 				continue
 
 			}
-			_, StaticRoles := rbacvalidation.NewTestRuleResolver(cluster.RBACConfig.Roles, cluster.RBACConfig.RoleBindings, cluster.RBACConfig.ClusterRoles, cluster.RBACConfig.ClusterRoleBindings)
-			cluster.Authorizer = util.NewAuthorizer(StaticRoles)
+
+			updateAuthorizer(cluster)
 
 		}
 	}()
 	return nil
 }
 
-func loadExistingRBAC(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) error {
+func loadExistingRBAC(cluster *proxy.ClusterConfig) error {
 	// List existing ClusterRoles
 	clusterRoles, err := cluster.Kubeclient.RbacV1().ClusterRoles().List(context.Background(), apisv1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list ClusterRoles: %v", err)
 	}
 	for i := range clusterRoles.Items {
-		RBACConfig.ClusterRoles = append(RBACConfig.ClusterRoles, &clusterRoles.Items[i])
+		cluster.RBACConfig.ClusterRoles = append(cluster.RBACConfig.ClusterRoles, &clusterRoles.Items[i])
 	}
 
 	// List existing ClusterRoleBindings
@@ -183,7 +183,7 @@ func loadExistingRBAC(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) error
 		return fmt.Errorf("failed to list ClusterRoleBindings: %v", err)
 	}
 	for i := range clusterRoleBindings.Items {
-		RBACConfig.ClusterRoleBindings = append(RBACConfig.ClusterRoleBindings, &clusterRoleBindings.Items[i])
+		cluster.RBACConfig.ClusterRoleBindings = append(cluster.RBACConfig.ClusterRoleBindings, &clusterRoleBindings.Items[i])
 	}
 
 	// For each namespace, list Roles and RoleBindings
@@ -200,7 +200,7 @@ func loadExistingRBAC(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) error
 			continue
 		}
 		for i := range roles.Items {
-			RBACConfig.Roles = append(RBACConfig.Roles, &roles.Items[i])
+			cluster.RBACConfig.Roles = append(cluster.RBACConfig.Roles, &roles.Items[i])
 		}
 
 		// List RoleBindings
@@ -210,22 +210,17 @@ func loadExistingRBAC(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) error
 			continue
 		}
 		for i := range roleBindings.Items {
-			RBACConfig.RoleBindings = append(RBACConfig.RoleBindings, &roleBindings.Items[i])
+			cluster.RBACConfig.RoleBindings = append(cluster.RBACConfig.RoleBindings, &roleBindings.Items[i])
 		}
 
 	}
-	_, staticRoles := rbacvalidation.NewTestRuleResolver(
-		RBACConfig.Roles,
-		RBACConfig.RoleBindings,
-		RBACConfig.ClusterRoles,
-		RBACConfig.ClusterRoleBindings,
-	)
-	cluster.Authorizer = util.NewAuthorizer(staticRoles)
+
+	updateAuthorizer(cluster)
 
 	return nil
 }
 
-func setupRBACWatchers(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) error {
+func setupRBACWatchers(cluster *proxy.ClusterConfig) error {
 	// Watch ClusterRoles
 	watchClusterRoles, err := cluster.Kubeclient.RbacV1().ClusterRoles().Watch(context.Background(), apisv1.ListOptions{})
 	if err != nil {
@@ -255,23 +250,23 @@ func setupRBACWatchers(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) erro
 
 			switch event.Type {
 			case watch.Added:
-				RBACConfig.ClusterRoles = append(RBACConfig.ClusterRoles, clusterRole)
+				cluster.RBACConfig.ClusterRoles = append(cluster.RBACConfig.ClusterRoles, clusterRole)
 			case watch.Modified:
-				for i, cr := range RBACConfig.ClusterRoles {
+				for i, cr := range cluster.RBACConfig.ClusterRoles {
 					if cr.Name == clusterRole.Name {
-						RBACConfig.ClusterRoles[i] = clusterRole
+						cluster.RBACConfig.ClusterRoles[i] = clusterRole
 						break
 					}
 				}
 			case watch.Deleted:
-				for i, cr := range RBACConfig.ClusterRoles {
+				for i, cr := range cluster.RBACConfig.ClusterRoles {
 					if cr.Name == clusterRole.Name {
-						RBACConfig.ClusterRoles = append(RBACConfig.ClusterRoles[:i], RBACConfig.ClusterRoles[i+1:]...)
+						cluster.RBACConfig.ClusterRoles = append(cluster.RBACConfig.ClusterRoles[:i], cluster.RBACConfig.ClusterRoles[i+1:]...)
 						break
 					}
 				}
 			}
-			updateAuthorizer(RBACConfig, cluster)
+			updateAuthorizer(cluster)
 		}
 	}()
 
@@ -286,23 +281,23 @@ func setupRBACWatchers(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) erro
 
 			switch event.Type {
 			case watch.Added:
-				RBACConfig.ClusterRoleBindings = append(RBACConfig.ClusterRoleBindings, crb)
+				cluster.RBACConfig.ClusterRoleBindings = append(cluster.RBACConfig.ClusterRoleBindings, crb)
 			case watch.Modified:
-				for i, binding := range RBACConfig.ClusterRoleBindings {
+				for i, binding := range cluster.RBACConfig.ClusterRoleBindings {
 					if binding.Name == crb.Name {
-						RBACConfig.ClusterRoleBindings[i] = crb
+						cluster.RBACConfig.ClusterRoleBindings[i] = crb
 						break
 					}
 				}
 			case watch.Deleted:
-				for i, binding := range RBACConfig.ClusterRoleBindings {
+				for i, binding := range cluster.RBACConfig.ClusterRoleBindings {
 					if binding.Name == crb.Name {
-						RBACConfig.ClusterRoleBindings = append(RBACConfig.ClusterRoleBindings[:i], RBACConfig.ClusterRoleBindings[i+1:]...)
+						cluster.RBACConfig.ClusterRoleBindings = append(cluster.RBACConfig.ClusterRoleBindings[:i], cluster.RBACConfig.ClusterRoleBindings[i+1:]...)
 						break
 					}
 				}
 			}
-			updateAuthorizer(RBACConfig, cluster)
+			updateAuthorizer(cluster)
 		}
 	}()
 
@@ -332,10 +327,10 @@ func setupRBACWatchers(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) erro
 				}
 
 				// Start Role watcher for this namespace
-				go watchNamespaceRoles(watchRoles, RBACConfig, cluster)
+				go watchNamespaceRoles(watchRoles, cluster)
 
 				// Start RoleBinding watcher for this namespace
-				go watchNamespaceRoleBindings(watchRoleBindings, RBACConfig, cluster)
+				go watchNamespaceRoleBindings(watchRoleBindings, cluster)
 			}
 		}
 	}()
@@ -343,7 +338,7 @@ func setupRBACWatchers(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) erro
 	return nil
 }
 
-func watchNamespaceRoles(watchRoles watch.Interface, RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) {
+func watchNamespaceRoles(watchRoles watch.Interface, cluster *proxy.ClusterConfig) {
 	for event := range watchRoles.ResultChan() {
 		role, ok := event.Object.(*v1.Role)
 		if !ok {
@@ -353,27 +348,27 @@ func watchNamespaceRoles(watchRoles watch.Interface, RBACConfig *util.RBAC, clus
 
 		switch event.Type {
 		case watch.Added:
-			RBACConfig.Roles = append(RBACConfig.Roles, role)
+			cluster.RBACConfig.Roles = append(cluster.RBACConfig.Roles, role)
 		case watch.Modified:
-			for i, r := range RBACConfig.Roles {
+			for i, r := range cluster.RBACConfig.Roles {
 				if r.Name == role.Name && r.Namespace == role.Namespace {
-					RBACConfig.Roles[i] = role
+					cluster.RBACConfig.Roles[i] = role
 					break
 				}
 			}
 		case watch.Deleted:
-			for i, r := range RBACConfig.Roles {
+			for i, r := range cluster.RBACConfig.Roles {
 				if r.Name == role.Name && r.Namespace == role.Namespace {
-					RBACConfig.Roles = append(RBACConfig.Roles[:i], RBACConfig.Roles[i+1:]...)
+					cluster.RBACConfig.Roles = append(cluster.RBACConfig.Roles[:i], cluster.RBACConfig.Roles[i+1:]...)
 					break
 				}
 			}
 		}
-		updateAuthorizer(RBACConfig, cluster)
+		updateAuthorizer(cluster)
 	}
 }
 
-func watchNamespaceRoleBindings(watchRoleBindings watch.Interface, RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) {
+func watchNamespaceRoleBindings(watchRoleBindings watch.Interface, cluster *proxy.ClusterConfig) {
 	for event := range watchRoleBindings.ResultChan() {
 		rb, ok := event.Object.(*v1.RoleBinding)
 		if !ok {
@@ -383,32 +378,32 @@ func watchNamespaceRoleBindings(watchRoleBindings watch.Interface, RBACConfig *u
 
 		switch event.Type {
 		case watch.Added:
-			RBACConfig.RoleBindings = append(RBACConfig.RoleBindings, rb)
+			cluster.RBACConfig.RoleBindings = append(cluster.RBACConfig.RoleBindings, rb)
 		case watch.Modified:
-			for i, binding := range RBACConfig.RoleBindings {
+			for i, binding := range cluster.RBACConfig.RoleBindings {
 				if binding.Name == rb.Name && binding.Namespace == rb.Namespace {
-					RBACConfig.RoleBindings[i] = rb
+					cluster.RBACConfig.RoleBindings[i] = rb
 					break
 				}
 			}
 		case watch.Deleted:
-			for i, binding := range RBACConfig.RoleBindings {
+			for i, binding := range cluster.RBACConfig.RoleBindings {
 				if binding.Name == rb.Name && binding.Namespace == rb.Namespace {
-					RBACConfig.RoleBindings = append(RBACConfig.RoleBindings[:i], RBACConfig.RoleBindings[i+1:]...)
+					cluster.RBACConfig.RoleBindings = append(cluster.RBACConfig.RoleBindings[:i], cluster.RBACConfig.RoleBindings[i+1:]...)
 					break
 				}
 			}
 		}
-		updateAuthorizer(RBACConfig, cluster)
+		updateAuthorizer(cluster)
 	}
 }
 
-func updateAuthorizer(RBACConfig *util.RBAC, cluster *proxy.ClusterConfig) {
+func updateAuthorizer(cluster *proxy.ClusterConfig) {
 	_, staticRoles := rbacvalidation.NewTestRuleResolver(
-		RBACConfig.Roles,
-		RBACConfig.RoleBindings,
-		RBACConfig.ClusterRoles,
-		RBACConfig.ClusterRoleBindings,
+		cluster.RBACConfig.Roles,
+		cluster.RBACConfig.RoleBindings,
+		cluster.RBACConfig.ClusterRoles,
+		cluster.RBACConfig.ClusterRoleBindings,
 	)
 	cluster.Authorizer = util.NewAuthorizer(staticRoles)
 	klog.V(4).Infof("Updated authorizer for cluster %s", cluster.Name)
