@@ -14,6 +14,7 @@ import (
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
 	"github.com/Improwised/kube-oidc-proxy/pkg/clustermanager"
+	"github.com/Improwised/kube-oidc-proxy/pkg/models"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/hooks"
@@ -145,49 +146,12 @@ func New(
 
 func (p *Proxy) Run(stopCh <-chan struct{}) (<-chan struct{}, <-chan struct{}, error) {
 	// standard round tripper for proxy to API Server
+	p.handleError = p.newErrorHandler()
 
 	for _, cluster := range p.clusterManager.GetAllClusters() {
-		clientRT, err := p.roundTripperForRestConfig(cluster.RestConfig)
-		if err != nil {
+		if err := p.SetupClusterProxy(cluster); err != nil {
 			return nil, nil, err
 		}
-
-		url, err := url.Parse(cluster.RestConfig.Host)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse url: %s", err)
-		}
-
-		// create proxy
-		proxyHandler := httputil.NewSingleHostReverseProxy(url)
-
-		// set proxy transport(use to forward request to API server)
-		cluster.ClientTransport = clientRT
-		proxyHandler.Transport = cluster
-
-		// No auth round tripper for no impersonation
-		if p.config.DisableImpersonation || p.config.TokenReview {
-			noAuthClientRT, err := p.roundTripperForRestConfig(&rest.Config{
-				APIPath: cluster.RestConfig.APIPath,
-				Host:    cluster.RestConfig.Host,
-				Timeout: cluster.RestConfig.Timeout,
-				TLSClientConfig: rest.TLSClientConfig{
-					CAFile: cluster.RestConfig.CAFile,
-					CAData: cluster.RestConfig.CAData,
-				},
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-
-			cluster.NoAuthClientTransport = noAuthClientRT
-		}
-
-		// Set up error handler
-		proxyHandler.ErrorHandler = p.handleError
-		proxyHandler.FlushInterval = p.config.FlushInterval
-		p.handleError = p.newErrorHandler()
-		cluster.ProxyHandler = proxyHandler
-		// proxyHandler.ModifyResponse =
 	}
 
 	// Set up proxy handler using proxy
@@ -207,6 +171,7 @@ func (p *Proxy) httpHandler(w http.ResponseWriter, r *http.Request) {
 		p.handleError(w, r, errUnauthorized)
 		return
 	}
+
 	cluster.ProxyHandler.ServeHTTP(w, r)
 }
 
@@ -301,4 +266,42 @@ func (p *Proxy) GetClusterName(path string) string {
 		return ""
 	}
 	return parts[1]
+}
+
+func (p *Proxy) SetupClusterProxy(cluster *models.Cluster) error {
+	clientRT, err := p.roundTripperForRestConfig(cluster.RestConfig)
+	if err != nil {
+		return err
+	}
+
+	url, err := url.Parse(cluster.RestConfig.Host)
+	if err != nil {
+		return fmt.Errorf("failed to parse url: %s", err)
+	}
+
+	proxyHandler := httputil.NewSingleHostReverseProxy(url)
+	cluster.ClientTransport = clientRT
+	proxyHandler.Transport = cluster
+
+	if p.config.DisableImpersonation || p.config.TokenReview {
+		noAuthClientRT, err := p.roundTripperForRestConfig(&rest.Config{
+			APIPath: cluster.RestConfig.APIPath,
+			Host:    cluster.RestConfig.Host,
+			Timeout: cluster.RestConfig.Timeout,
+			TLSClientConfig: rest.TLSClientConfig{
+				CAFile: cluster.RestConfig.CAFile,
+				CAData: cluster.RestConfig.CAData,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		cluster.NoAuthClientTransport = noAuthClientRT
+	}
+
+	proxyHandler.ErrorHandler = p.handleError
+	proxyHandler.FlushInterval = p.config.FlushInterval
+	cluster.ProxyHandler = proxyHandler
+
+	return nil
 }

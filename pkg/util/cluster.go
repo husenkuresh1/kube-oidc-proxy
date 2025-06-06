@@ -9,7 +9,6 @@ import (
 
 func BuildConfiguration() (*rest.Config, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
-	kubeconfig = "/home/husen.kureshi/.kube/configs/local-k3s"
 	var clusterConfig *rest.Config
 	var err error
 	if kubeconfig != "" {

@@ -27,6 +27,7 @@ type Cluster struct {
 	ProxyHandler          *httputil.ReverseProxy
 	ClientTransport       http.RoundTripper
 	NoAuthClientTransport http.RoundTripper
+	IsStatic              bool
 }
 
 var (

@@ -406,5 +406,4 @@ func updateAuthorizer(cluster *models.Cluster) {
 		cluster.RBACConfig.ClusterRoleBindings,
 	)
 	cluster.Authorizer = util.NewAuthorizer(staticRoles)
-	klog.V(4).Infof("Updated authorizer for cluster %s", cluster.Name)
 }

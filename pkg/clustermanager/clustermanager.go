@@ -28,6 +28,7 @@ type ClusterManager struct {
 	clustersRoleConfigMap   map[string]util.RBAC
 	capiRbacWatcher         *crd.CAPIRbacWatcher
 	stopCh                  <-chan struct{}
+	SetupFunc               func(*models.Cluster) error
 }
 
 func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnables bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher) (*ClusterManager, error) {
@@ -52,9 +53,12 @@ func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnables bool, aud
 }
 
 func (cm *ClusterManager) WatchDynamicClusters(namespace, secretName string) {
-	watcher, err := cm.clientset.CoreV1().Secrets(namespace).Watch(context.TODO(), metav1.ListOptions{})
+
+	watcher, err := cm.clientset.CoreV1().Secrets(namespace).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("metadata.name=%s", secretName),
+	})
 	if err != nil {
-		klog.Errorf("Failed to start watcher for dynamic clusters: %v", err)
+		klog.Errorf("Failed to start watcher for secret %s: %v", secretName, err)
 		return
 	}
 
@@ -81,8 +85,22 @@ func (cm *ClusterManager) WatchDynamicClusters(namespace, secretName string) {
 }
 
 func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
+
+	// Build set of current clusters in the secret
+	currentClusters := make(map[string]bool)
+	for clusterName := range secret.Data {
+		currentClusters[clusterName] = true
+	}
+
+	// Remove clusters not present in the current secret
+	existingClusters := cm.GetAllClusters()
+	for _, cluster := range existingClusters {
+		if _, exists := currentClusters[cluster.Name]; !exists && !cluster.IsStatic {
+			cm.RemoveCluster(cluster.Name)
+		}
+	}
+
 	for clusterName, kubeconfig := range secret.Data {
-		fmt.Println("cluster ", clusterName, "found in secret")
 		restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfig)
 		if err != nil {
 			klog.Errorf("Failed to create rest config for %s: %v", clusterName, err)
@@ -92,10 +110,19 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 		cluster := &models.Cluster{
 			Name:       clusterName,
 			RestConfig: restConfig,
+			IsStatic:   false,
 		}
 		err = cm.ClusterSetup(cluster)
 		if err != nil {
 			return err
+		}
+
+		// Add this after cluster setup
+		if cm.SetupFunc != nil {
+			if err := cm.SetupFunc(cluster); err != nil {
+				klog.Errorf("Proxy setup failed for %s: %v", clusterName, err)
+				continue
+			}
 		}
 		cm.AddOrUpdateCluster(cluster)
 

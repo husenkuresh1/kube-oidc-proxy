@@ -83,7 +83,6 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			if err != nil {
 				return err
 			}
-			fmt.Println("clustermnager started")
 
 			for _, cluster := range clustersConfig {
 
@@ -104,12 +103,10 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				if err != nil {
 					return err
 				}
+				cluster.IsStatic = true
 				clusterManager.AddOrUpdateCluster(cluster)
 
 			}
-
-			go clusterManager.WatchDynamicClusters("default", "multi-cluster-kubeconfigs")
-			fmt.Println("dynamic cluster watcher started")
 
 			if capiRbacWatcher != nil {
 				klog.V(5).Info("Starting CAPI RBAC watcher", capiRbacWatcher)
@@ -140,6 +137,11 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			if err != nil {
 				return err
 			}
+
+			// Set setup function for dynamic clusters
+			clusterManager.SetupFunc = p.SetupClusterProxy
+
+			go clusterManager.WatchDynamicClusters("default", "kube-oidc-proxy-kubeconfigs")
 
 			// Create a fake JWT to set up readiness probe
 			fakeJWT, err := util.FakeJWT(opts.OIDCAuthentication.IssuerURL)
