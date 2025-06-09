@@ -23,9 +23,9 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
+	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
 	"github.com/Improwised/kube-oidc-proxy/pkg/clustermanager"
 	"github.com/Improwised/kube-oidc-proxy/pkg/mocks"
-	"github.com/Improwised/kube-oidc-proxy/pkg/models"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/hooks"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/logging"
@@ -298,7 +298,7 @@ func newTestProxy(t *testing.T) *fakeProxy {
 	subjectAccessReview, _ := subjectaccessreview.New(fakeSubjectAccessReviewer)
 
 	// Define a test cluster
-	testCluster := &models.Cluster{
+	testCluster := &cluster.Cluster{
 		Name:                  "test-cluster",
 		SubjectAccessReviewer: subjectAccessReview,
 		RestConfig:            &rest.Config{},

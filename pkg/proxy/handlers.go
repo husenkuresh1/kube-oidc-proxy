@@ -14,7 +14,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/kubeapiserver/admission/exclusion"
 
-	"github.com/Improwised/kube-oidc-proxy/pkg/models"
+	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/logging"
@@ -306,7 +306,7 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 			return
 
 			// No impersonation configuration found in context
-		case models.ErrNoImpersonationConfig:
+		case cluster.ErrNoImpersonationConfig:
 			klog.Errorf("if you are seeing this, there is likely a bug in the proxy (%s): %s", r.RemoteAddr, err)
 			http.Error(rw, "", http.StatusInternalServerError)
 			return

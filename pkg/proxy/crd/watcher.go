@@ -3,7 +3,7 @@ package crd
 import (
 	"time"
 
-	"github.com/Improwised/kube-oidc-proxy/pkg/models"
+	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
@@ -17,10 +17,10 @@ type CAPIRbacWatcher struct {
 	CAPIRoleInformer               cache.SharedIndexInformer
 	CAPIClusterRoleBindingInformer cache.SharedIndexInformer
 	CAPIRoleBindingInformer        cache.SharedIndexInformer
-	clusters                       []*models.Cluster
+	clusters                       []*cluster.Cluster
 }
 
-func NewCAPIRbacWatcher(clusters []*models.Cluster) (*CAPIRbacWatcher, error) {
+func NewCAPIRbacWatcher(clusters []*cluster.Cluster) (*CAPIRbacWatcher, error) {
 
 	clusterConfig, err := util.BuildConfiguration()
 	if err != nil {
@@ -253,6 +253,6 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	})
 }
 
-func (w *CAPIRbacWatcher) UpdateClusters(clusters []*models.Cluster) {
+func (w *CAPIRbacWatcher) UpdateClusters(clusters []*cluster.Cluster) {
 	w.clusters = clusters
 }

@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
+	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
 	"github.com/Improwised/kube-oidc-proxy/pkg/clustermanager"
-	"github.com/Improwised/kube-oidc-proxy/pkg/models"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/hooks"
@@ -268,7 +268,7 @@ func (p *Proxy) GetClusterName(path string) string {
 	return parts[1]
 }
 
-func (p *Proxy) SetupClusterProxy(cluster *models.Cluster) error {
+func (p *Proxy) SetupClusterProxy(cluster *cluster.Cluster) error {
 	clientRT, err := p.roundTripperForRestConfig(cluster.RestConfig)
 	if err != nil {
 		return err

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -95,5 +96,21 @@ func (h *Helper) UpdateCRDObject(obj interface{}, gvr schema.GroupVersionResourc
 		&unstructured.Unstructured{Object: unstructuredObj},
 		metav1.UpdateOptions{},
 	)
+	return err
+}
+
+func (h *Helper) CreateDynamicClusterSecret(name string) error {
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-oidc-proxy-kubeconfigs",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			name: []byte(kindKubeConfig),
+		},
+	}
+
+	_, err = h.KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
 	return err
 }

@@ -1,4 +1,4 @@
-package models
+package cluster
 
 import (
 	"errors"
@@ -15,19 +15,20 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 )
 
+// Cluster represents a Kubernetes cluster configuration and its associated resources.
 type Cluster struct {
-	Name                  string
-	Path                  string
-	RestConfig            *rest.Config
-	Kubeclient            *kubernetes.Clientset
-	TokenReviewer         *tokenreview.TokenReview
-	SubjectAccessReviewer *subjectaccessreview.SubjectAccessReview
-	Authorizer            *rbac.RBACAuthorizer
-	RBACConfig            *util.RBAC
-	ProxyHandler          *httputil.ReverseProxy
-	ClientTransport       http.RoundTripper
-	NoAuthClientTransport http.RoundTripper
-	IsStatic              bool
+	Name                  string                                   // Name of the cluster
+	Path                  string                                   // Path to the kubeconfig file
+	RestConfig            *rest.Config                             // REST configuration for Kubernetes API access
+	Kubeclient            *kubernetes.Clientset                    // Kubernetes client for interacting with the cluster
+	TokenReviewer         *tokenreview.TokenReview                 // Token reviewer for validating tokens
+	SubjectAccessReviewer *subjectaccessreview.SubjectAccessReview // Reviewer for subject access requests
+	Authorizer            *rbac.RBACAuthorizer                     // RBAC authorizer for access control
+	RBACConfig            *util.RBAC                               // RBAC configuration for the cluster
+	ProxyHandler          *httputil.ReverseProxy                   // Reverse proxy handler for forwarding requests
+	ClientTransport       http.RoundTripper                        // Transport for authenticated requests
+	NoAuthClientTransport http.RoundTripper                        // Transport for unauthenticated requests
+	IsStatic              bool                                     // Indicates if the cluster is statically configured
 }
 
 var (
