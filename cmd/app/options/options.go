@@ -65,7 +65,7 @@ func (o *Options) AddFlags(cmd *cobra.Command) {
 		fs.AddFlagSet(f)
 	}
 
-	fs.StringVar(&o.Namespace, "namespace", "default", "Namespace to watch for dynamic clusters")
+	fs.StringVar(&o.Namespace, "secret-namespace", "default", "Namespace to watch for dynamic clusters")
 	fs.StringVar(&o.SecretName, "secret-name", "kube-oidc-proxy-kubeconfigs", "Secret name to watch for dynamic clusters")
 
 }

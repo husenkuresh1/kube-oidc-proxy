@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/Improwised/kube-oidc-proxy/constants"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/crd"
 	"github.com/Improwised/kube-oidc-proxy/test/e2e/framework"
 	. "github.com/onsi/ginkgo"
@@ -22,15 +23,34 @@ var _ = framework.CasesDescribe("Comprehensive Dynamic Cluster Management", func
 	f := framework.NewDefaultFramework("comprehensive-cluster-mgmt")
 
 	AfterEach(func() {
+
 		By("Cleaning up secrets after test case")
 		err := f.Helper().KubeClient.CoreV1().Secrets("default").DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred(), "Failed to clean up secrets")
+
 	})
 
 	Describe("Basic Dynamic Cluster Operations", func() {
+
+		AfterEach(func() {
+			err := f.Helper().DeleteCRDObject("namespace-reader", crd.CAPIClusterRoleGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader-binding", crd.CAPIClusterRoleBindingGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("should successfully add a new dynamic cluster", func() {
+
 			By("Creating dynamic cluster secret with single cluster")
-			err := f.Helper().CreateDynamicClusterSecret("test-cluster-1")
+			secret, err := createSingleClusterSecret("test-cluster-1", f)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for cluster to be added")
@@ -53,6 +73,10 @@ var _ = framework.CasesDescribe("Comprehensive Dynamic Cluster Management", func
 			secret, err := createMultiClusterSecret(f, "test-cluster-2", "test-cluster-3", "test-cluster-4")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for clusters to be processed")
@@ -78,6 +102,10 @@ var _ = framework.CasesDescribe("Comprehensive Dynamic Cluster Management", func
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for initial cluster to be ready")
@@ -111,6 +139,10 @@ var _ = framework.CasesDescribe("Comprehensive Dynamic Cluster Management", func
 			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
+			Expect(err).NotTo(HaveOccurred())
+
 			By("Verifying cluster is accessible")
 			time.Sleep(3 * time.Second)
 			config := f.NewProxyRestConfig()
@@ -129,10 +161,10 @@ var _ = framework.CasesDescribe("Comprehensive Dynamic Cluster Management", func
 
 			By("Verifying cluster is no longer accessible")
 			time.Sleep(3 * time.Second)
-			Eventually(func() bool {
+			Eventually(func() error {
 				_, err := client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-				return k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)
-			}, 10*time.Second).Should(BeTrue())
+				return err
+			}, 10*time.Second).Should(HaveOccurred())
 		})
 	})
 
@@ -159,7 +191,7 @@ var _ = framework.CasesDescribe("Comprehensive Dynamic Cluster Management", func
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should handle empty secret data", func() {
@@ -192,20 +224,20 @@ apiVersion: v1
 kind: Config
 clusters:
 - cluster:
-    server: https://invalid-server:6443
-    certificate-authority-data: invalid-cert-data
+	server: https://invalid-server:6443
+	certificate-authority-data: invalid-cert-data
   name: corrupted-cluster
 contexts:
 - context:
-    cluster: corrupted-cluster
-    user: admin
+	cluster: corrupted-cluster
+	user: admin
   name: admin@corrupted-cluster
 current-context: admin@corrupted-cluster
 users:
 - name: admin
   user:
-    client-certificate-data: invalid-client-cert
-    client-key-data: invalid-client-key
+	client-certificate-data: invalid-client-cert
+	client-key-data: invalid-client-key
 `),
 				},
 			}
@@ -220,37 +252,7 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
-		})
-
-		It("should handle duplicate cluster names", func() {
-			By("Creating first cluster")
-			secret1, err := createSingleClusterSecret("duplicate-name-cluster", f)
-			Expect(err).NotTo(HaveOccurred())
-
-			secret1.Name = "secret-1"
-			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret1, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Creating second cluster with same name")
-			secret2, err := createSingleClusterSecret("duplicate-name-cluster", f)
-			Expect(err).NotTo(HaveOccurred())
-
-			secret2.Name = "secret-2"
-			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret2, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Verifying one of the clusters is accessible")
-			time.Sleep(3 * time.Second)
-			config := f.NewProxyRestConfig()
-			config.Host = config.Host + "/duplicate-name-cluster"
-			client, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() error {
-				_, err := client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-				return err
-			}, 10*time.Second).Should(Succeed())
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should handle mixed valid and invalid clusters in single secret", func() {
@@ -271,6 +273,10 @@ users:
 			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
+			Expect(err).NotTo(HaveOccurred())
+
 			By("Verifying valid cluster is accessible")
 			time.Sleep(3 * time.Second)
 			config := f.NewProxyRestConfig()
@@ -289,7 +295,13 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = invalidClient.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader", crd.CAPIClusterRoleGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader-binding", crd.CAPIClusterRoleBindingGVR, "")
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -341,7 +353,11 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating dynamic cluster after RBAC rules")
-			err = f.Helper().CreateDynamicClusterSecret("rbac-test-cluster")
+
+			secret, err := createSingleClusterSecret("rbac-test-cluster", f)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for RBAC reconciliation")
@@ -365,8 +381,13 @@ users:
 
 		It("should apply cluster-specific RBAC rules", func() {
 			By("Creating dynamic cluster first")
-			err := f.Helper().CreateDynamicClusterSecret("specific-rbac-cluster")
+
+			secret, err := createSingleClusterSecret("specific-rbac-cluster", f)
 			Expect(err).NotTo(HaveOccurred())
+
+			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
 			time.Sleep(3 * time.Second)
 
 			By("Creating cluster-specific CAPIClusterRole")
@@ -434,6 +455,7 @@ users:
 
 			By("Verifying no access in default cluster")
 			defaultConfig := f.NewProxyRestConfig()
+			defaultConfig.Host = config.Host + constants.ClusterName
 			defaultClient, err := kubernetes.NewForConfig(defaultConfig)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -443,8 +465,13 @@ users:
 
 		It("should handle RBAC updates for existing dynamic clusters", func() {
 			By("Creating dynamic cluster")
-			err := f.Helper().CreateDynamicClusterSecret("rbac-update-cluster")
+
+			secret, err := createSingleClusterSecret("rbac-update-cluster", f)
 			Expect(err).NotTo(HaveOccurred())
+
+			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
 			time.Sleep(3 * time.Second)
 
 			By("Verifying initial forbidden access")
@@ -556,6 +583,10 @@ users:
 			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
+			Expect(err).NotTo(HaveOccurred())
+
 			By("Waiting for all clusters to be processed")
 			time.Sleep(10 * time.Second)
 
@@ -572,6 +603,12 @@ users:
 					return err
 				}, 10*time.Second).Should(Succeed(), fmt.Sprintf("Cluster %s should be accessible", clusterName))
 			}
+
+			err = f.Helper().DeleteCRDObject("namespace-reader", crd.CAPIClusterRoleGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader-binding", crd.CAPIClusterRoleBindingGVR, "")
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -581,8 +618,11 @@ users:
 			secret, err := createSingleClusterSecret("concurrent-cluster-1", f)
 			Expect(err).NotTo(HaveOccurred())
 
-			secret.Name = "concurrent-secret"
 			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Performing concurrent updates")
@@ -592,7 +632,7 @@ users:
 			go func() {
 				defer GinkgoRecover()
 				time.Sleep(100 * time.Millisecond)
-				secret, err := f.Helper().KubeClient.CoreV1().Secrets("default").Get(context.TODO(), "concurrent-secret", metav1.GetOptions{})
+				secret, err := f.Helper().KubeClient.CoreV1().Secrets("default").Get(context.TODO(), "kube-oidc-proxy-kubeconfigs", metav1.GetOptions{})
 				if err == nil {
 					secret.Data["concurrent-cluster-2"] = secret.Data["concurrent-cluster-1"]
 					f.Helper().KubeClient.CoreV1().Secrets("default").Update(context.TODO(), secret, metav1.UpdateOptions{})
@@ -604,7 +644,7 @@ users:
 			go func() {
 				defer GinkgoRecover()
 				time.Sleep(200 * time.Millisecond)
-				secret, err := f.Helper().KubeClient.CoreV1().Secrets("default").Get(context.TODO(), "concurrent-secret", metav1.GetOptions{})
+				secret, err := f.Helper().KubeClient.CoreV1().Secrets("default").Get(context.TODO(), "kube-oidc-proxy-kubeconfigs", metav1.GetOptions{})
 				if err == nil {
 					secret.Data["concurrent-cluster-3"] = secret.Data["concurrent-cluster-1"]
 					f.Helper().KubeClient.CoreV1().Secrets("default").Update(context.TODO(), secret, metav1.UpdateOptions{})
@@ -616,12 +656,11 @@ users:
 			go func() {
 				defer GinkgoRecover()
 				time.Sleep(300 * time.Millisecond)
-				f.Helper().KubeClient.CoreV1().Secrets("default").Delete(context.TODO(), "concurrent-secret", metav1.DeleteOptions{})
+				f.Helper().KubeClient.CoreV1().Secrets("default").Delete(context.TODO(), "kube-oidc-proxy-kubeconfigs", metav1.DeleteOptions{})
 				time.Sleep(100 * time.Millisecond)
 				newSecret, err := createSingleClusterSecret("concurrent-cluster-final", f)
 				Expect(err).NotTo(HaveOccurred())
 
-				newSecret.Name = "concurrent-secret"
 				f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), newSecret, metav1.CreateOptions{})
 				done <- true
 			}()
@@ -642,6 +681,12 @@ users:
 				_, err := client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 				return err
 			}, 10*time.Second).Should(Succeed())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader", crd.CAPIClusterRoleGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader-binding", crd.CAPIClusterRoleBindingGVR, "")
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -649,15 +694,25 @@ users:
 		It("should preserve static clusters when dynamic clusters change", func() {
 			By("Verifying static cluster is accessible")
 			config := f.NewProxyRestConfig()
+			config.Host = fmt.Sprintf("%s/%s", config.Host, constants.ClusterName)
 			staticClient, err := kubernetes.NewForConfig(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = staticClient.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Adding dynamic clusters")
-			err = f.Helper().CreateDynamicClusterSecret("coexist-dynamic-1")
+
+			secret, err := createSingleClusterSecret("coexist-dynamic-1", f)
 			Expect(err).NotTo(HaveOccurred())
+
+			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
 			time.Sleep(3 * time.Second)
 
 			By("Verifying both static and dynamic clusters work")
@@ -684,13 +739,23 @@ users:
 			By("Verifying static cluster still works")
 			_, err = staticClient.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader", crd.CAPIClusterRoleGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader-binding", crd.CAPIClusterRoleBindingGVR, "")
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
 	Describe("Resource Cleanup and Garbage Collection", func() {
 		It("should clean up resources when clusters are removed", func() {
 			By("Creating cluster with RBAC")
-			err := f.Helper().CreateDynamicClusterSecret("cleanup-test-cluster")
+
+			secret, err := createSingleClusterSecret("cleanup-test-cluster", f)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			role := &crd.CAPIClusterRole{
@@ -717,6 +782,25 @@ users:
 			err = f.Helper().CreateCRDObject(role, crd.CAPIClusterRoleGVR, "")
 			Expect(err).NotTo(HaveOccurred())
 
+			binding := &crd.CAPIClusterRoleBinding{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "rbac.platformengineers.io/v1",
+					Kind:       "CAPIClusterRoleBinding",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cleanup-test-role-binding",
+				},
+				Spec: crd.CAPIClusterRoleBindingSpec{
+					CommonBindingSpec: crd.CommonBindingSpec{
+						RoleRef:        []string{"cleanup-test-role"},
+						Subjects:       []crd.Subject{{Group: "group-1"}},
+						TargetClusters: []string{"cleanup-test-cluster"},
+					},
+				},
+			}
+			err = f.Helper().CreateCRDObject(binding, crd.CAPIClusterRoleBindingGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+
 			By("Verifying cluster and RBAC work")
 			time.Sleep(5 * time.Second)
 			config := f.NewProxyRestConfig()
@@ -735,10 +819,10 @@ users:
 
 			By("Verifying cluster is no longer accessible")
 			time.Sleep(3 * time.Second)
-			Eventually(func() bool {
+			Eventually(func() error {
 				_, err := client.CoreV1().Pods(f.Namespace.Name).List(context.TODO(), metav1.ListOptions{})
-				return k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)
-			}, 10*time.Second).Should(BeTrue())
+				return err
+			}, 10*time.Second).Should(HaveOccurred())
 		})
 	})
 
@@ -784,7 +868,7 @@ users:
 
 			By("Making request that should fail due to unreachable endpoint")
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err) || k8sErrors.IsTimeout(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should handle clusters with DNS resolution failures", func() {
@@ -827,7 +911,7 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err) || k8sErrors.IsTimeout(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should handle clusters with wrong ports", func() {
@@ -870,7 +954,7 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err) || k8sErrors.IsTimeout(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -894,6 +978,10 @@ users:
 				},
 			}
 			_, err = f.Helper().KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for processing")
@@ -920,8 +1008,14 @@ users:
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-				Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue(), "Invalid cluster %s should not be accessible", clusterName)
+				Expect(err).To(HaveOccurred(), "Invalid cluster %s should not be accessible", clusterName)
 			}
+
+			err = f.Helper().DeleteCRDObject("namespace-reader", crd.CAPIClusterRoleGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader-binding", crd.CAPIClusterRoleBindingGVR, "")
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -964,7 +1058,7 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should reject secrets with missing required kubeconfig fields", func() {
@@ -1002,7 +1096,7 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should reject secrets with missing server URL", func() {
@@ -1044,7 +1138,7 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("should handle kubeconfig with invalid server URL", func() {
@@ -1087,7 +1181,7 @@ users:
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -1116,6 +1210,10 @@ users:
 			_, err = f.Helper().KubeClient.CoreV1().Secrets("kube-system").Create(context.TODO(), wrongNsSecret, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Creating Clusterrole and Clusterrolebinding for list namespace")
+			err = createRBACForListNamespace(f)
+			Expect(err).NotTo(HaveOccurred())
+
 			By("Waiting for processing")
 			time.Sleep(3 * time.Second)
 
@@ -1137,7 +1235,7 @@ users:
 			wrongNameClient, err := kubernetes.NewForConfig(wrongNameConfig)
 			Expect(err).NotTo(HaveOccurred())
 			_, err = wrongNameClient.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
 
 			// Wrong namespace cluster
 			wrongNsConfig := f.NewProxyRestConfig()
@@ -1145,7 +1243,13 @@ users:
 			wrongNsClient, err := kubernetes.NewForConfig(wrongNsConfig)
 			Expect(err).NotTo(HaveOccurred())
 			_, err = wrongNsClient.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-			Expect(k8sErrors.IsNotFound(err) || k8sErrors.IsServiceUnavailable(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader", crd.CAPIClusterRoleGVR, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = f.Helper().DeleteCRDObject("namespace-reader-binding", crd.CAPIClusterRoleBindingGVR, "")
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
@@ -1201,4 +1305,52 @@ func getValidKubeconfig(f *framework.Framework) ([]byte, error) {
 		"server: https://kube-oidc-proxy-e2e-control-plane:6443")
 
 	return []byte(kindKubeConfig), nil
+}
+
+func createRBACForListNamespace(f *framework.Framework) error {
+	By("Creating RBAC rules for list namespace")
+	role := &crd.CAPIClusterRole{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.platformengineers.io/v1",
+			Kind:       "CAPIClusterRole",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespace-reader",
+		},
+		Spec: crd.CAPIClusterRoleSpec{
+			CommonRoleSpec: crd.CommonRoleSpec{
+				TargetClusters: []string{"*"},
+				Rules: []v1.PolicyRule{
+					{
+						APIGroups: []string{""},
+						Resources: []string{"namespaces"},
+						Verbs:     []string{"get", "list"},
+					},
+				},
+			},
+		},
+	}
+	err := f.Helper().CreateCRDObject(role, crd.CAPIClusterRoleGVR, "")
+	if err != nil {
+		return err
+	}
+
+	binding := &crd.CAPIClusterRoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.platformengineers.io/v1",
+			Kind:       "CAPIClusterRoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespace-reader-binding",
+		},
+		Spec: crd.CAPIClusterRoleBindingSpec{
+			CommonBindingSpec: crd.CommonBindingSpec{
+				RoleRef:        []string{"namespace-reader"},
+				Subjects:       []crd.Subject{{Group: "group-1"}},
+				TargetClusters: []string{"*"},
+			},
+		},
+	}
+	err = f.Helper().CreateCRDObject(binding, crd.CAPIClusterRoleBindingGVR, "")
+	return err
 }

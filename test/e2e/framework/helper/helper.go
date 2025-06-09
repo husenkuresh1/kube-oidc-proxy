@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -49,7 +48,6 @@ func (h *Helper) Config() *config.Config {
 	return h.cfg
 }
 
-// helper.go
 func (h *Helper) CreateCRDObject(obj interface{}, gvr schema.GroupVersionResource, namespace string) error {
 	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
@@ -99,18 +97,21 @@ func (h *Helper) UpdateCRDObject(obj interface{}, gvr schema.GroupVersionResourc
 	return err
 }
 
-func (h *Helper) CreateDynamicClusterSecret(name string) error {
-
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kube-oidc-proxy-kubeconfigs",
-			Namespace: "default",
-		},
-		Data: map[string][]byte{
-			name: []byte(kindKubeConfig),
-		},
+func (h *Helper) DeleteCRDObject(name string, gvr schema.GroupVersionResource, namespace string) error {
+	dynamicClient, err := h.NewDynamicClient()
+	if err != nil {
+		return fmt.Errorf("failed to create dynamic client: %v", err)
 	}
 
-	_, err = h.KubeClient.CoreV1().Secrets("default").Create(context.TODO(), secret, metav1.CreateOptions{})
-	return err
+	// Delete the resource by name
+	err = dynamicClient.Resource(gvr).Namespace(namespace).Delete(
+		context.TODO(),
+		name,
+		metav1.DeleteOptions{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to delete object: %v", err)
+	}
+
+	return nil
 }

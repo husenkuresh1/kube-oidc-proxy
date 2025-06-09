@@ -122,9 +122,8 @@ func (h *Helper) DeployProxy(ns *corev1.Namespace, issuerURL *url.URL, clientID 
 		Name:            kind.ProxyImageName,
 		Image:           kind.ProxyImageName,
 		ImagePullPolicy: corev1.PullNever,
-		// Command:         []string{"./proxy"},
+		Command:         []string{"./proxy"},
 		Args: append([]string{
-			"kube-oidc-proxy",
 			"--secure-port=6443",
 			"--tls-cert-file=/tls/cert.pem",
 			"--tls-private-key-file=/tls/key.pem",
