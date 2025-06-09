@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/rbac/v1"
+
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -455,7 +456,7 @@ users:
 
 			By("Verifying no access in default cluster")
 			defaultConfig := f.NewProxyRestConfig()
-			defaultConfig.Host = config.Host + constants.ClusterName
+			defaultConfig.Host = fmt.Sprintf("%s/%s", defaultConfig.Host, constants.ClusterName)
 			defaultClient, err := kubernetes.NewForConfig(defaultConfig)
 			Expect(err).NotTo(HaveOccurred())
 
