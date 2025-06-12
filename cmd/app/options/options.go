@@ -23,7 +23,7 @@ type Options struct {
 	Audit              *AuditOptions
 	Client             *ClientOptions
 	Misc               *MiscOptions
-	Namespace          string
+	SecretNamespace    string
 	SecretName         string
 
 	nfs *cliflag.NamedFlagSets
@@ -65,7 +65,8 @@ func (o *Options) AddFlags(cmd *cobra.Command) {
 		fs.AddFlagSet(f)
 	}
 
-	fs.StringVar(&o.Namespace, "secret-namespace", "default", "Namespace to watch for dynamic clusters")
+	// Get the current namespace or use "default" as fallback
+	fs.StringVar(&o.SecretNamespace, "secret-namespace", "", "Namespace to watch for dynamic clusters")
 	fs.StringVar(&o.SecretName, "secret-name", "kube-oidc-proxy-kubeconfigs", "Secret name to watch for dynamic clusters")
 
 }

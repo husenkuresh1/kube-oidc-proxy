@@ -2,6 +2,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
@@ -19,6 +22,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/crd"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // NewRunCommand creates and returns the main cobra command for running the proxy
@@ -158,7 +162,10 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			clusterManager.SetupFunc = proxyInstance.SetupClusterProxy
 
 			// Start watching for dynamic clusters
-			go clusterManager.WatchDynamicClusters(opts.Namespace, opts.SecretName)
+			if opts.SecretNamespace == "" {
+				opts.SecretNamespace = getCurrentNamespace()
+			}
+			go clusterManager.WatchDynamicClusters(opts.SecretNamespace, opts.SecretName)
 
 			// Generate fake JWT for readiness probe
 			fakeJWT, err := util.FakeJWT(opts.OIDCAuthentication.IssuerURL)
@@ -245,4 +252,39 @@ func validateClusterConfig(clusterConfig []*cluster.Cluster) error {
 	}
 
 	return nil
+}
+
+func getCurrentNamespace() string {
+	ns := "kube-oidc-proxy" //set namespace to kube-oidc-proxy as conventional assumtion
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		klog.Errorf("failed to get incluster config: %v", err)
+		return ns
+	}
+
+	// Create Kubernetes client
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		klog.Errorf("failed to create clientset: %v", err)
+		return ns
+	}
+
+	labelSelector := fmt.Sprintf("app.kubernetes.io/component=%s,app.kubernetes.io/instance=%s", options.AppName, options.AppName)
+
+	// List Services across all namespaces
+	services, err := clientset.CoreV1().Services("").List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		klog.Errorf("error listing services: %v", err)
+		return ns
+	}
+
+	// Print matching services
+	for _, svc := range services.Items {
+		return svc.Namespace
+	}
+
+	return ns
 }
