@@ -185,7 +185,7 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 		// Set up the cluster with necessary components
 		if err = cm.ClusterSetup(newCluster); err != nil {
 			klog.Errorf("Failed to set up cluster %s: %v", clusterName, err)
-			return err
+			continue
 		}
 
 		// Run additional setup if a setup function is provided
