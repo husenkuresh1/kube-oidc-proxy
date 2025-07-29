@@ -278,3 +278,30 @@ func TestRemoveDynamicClusters(t *testing.T) {
 	assert.Nil(t, cm.GetCluster("cluster1"))
 	assert.Nil(t, cm.GetCluster("cluster2"))
 }
+
+// TestNewSecretController tests creating a new SecretController
+func TestNewSecretController(t *testing.T) {
+	// Create a fake Kubernetes client
+	fakeClient := fake.NewSimpleClientset()
+
+	// Create a ClusterManager with the fake client
+	cm := &ClusterManager{
+		clusters:                make(map[string]*cluster.Cluster),
+		clientset:               fakeClient,
+		tokenPassthroughEnabled: false,
+		audiences:               []string{},
+		clustersRoleConfigMap:   make(map[string]util.RBAC),
+	}
+
+	// Test creating a SecretController
+	controller, err := NewSecretController(cm, "test-namespace", "test-secret")
+
+	// Verify that the controller was created successfully
+	assert.NoError(t, err)
+	assert.NotNil(t, controller)
+	assert.Equal(t, cm, controller.clusterManager)
+	assert.Equal(t, "test-namespace", controller.namespace)
+	assert.Equal(t, "test-secret", controller.secretName)
+	assert.NotNil(t, controller.secretsInformer)
+	assert.NotNil(t, controller.queue)
+}

@@ -161,11 +161,22 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			// Configure cluster manager to use proxy for dynamic clusters
 			clusterManager.SetupFunc = proxyInstance.SetupClusterProxy
 
-			// Start watching for dynamic clusters
+			// Start watching for dynamic clusters using the new controller pattern
 			if opts.SecretNamespace == "" {
 				opts.SecretNamespace = getCurrentNamespace()
 			}
-			go clusterManager.WatchDynamicClusters(opts.SecretNamespace, opts.SecretName)
+
+			// Create context from stopCh for the secret controller
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				<-stopCh
+				cancel()
+			}()
+
+			// Start the secret controller with proper controller pattern
+			if err := clusterManager.StartSecretController(ctx, opts.SecretNamespace, opts.SecretName, 1); err != nil {
+				return fmt.Errorf("failed to start secret controller: %w", err)
+			}
 
 			// Generate fake JWT for readiness probe
 			fakeJWT, err := util.FakeJWT(opts.OIDCAuthentication.IssuerURL)
