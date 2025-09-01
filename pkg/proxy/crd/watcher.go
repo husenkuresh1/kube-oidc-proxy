@@ -123,7 +123,7 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	w.CAPIClusterRoleInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			if !w.initialProcessingComplete {
-				klog.V(5).Infof("Skipping CAPIRole add event during initial processing")
+				klog.V(5).Infof("Skipping CAPIClusterRole add event during initial processing")
 				return
 			}
 			capiClusterRole, err := ConvertUnstructured[CAPIClusterRole](obj)
@@ -173,7 +173,7 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	w.CAPIRoleBindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			if !w.initialProcessingComplete {
-				klog.V(5).Infof("Skipping CAPIRole add event during initial processing")
+				klog.V(5).Infof("Skipping CAPIRoleBinding add event during initial processing")
 				return
 			}
 			capiRoleBinding, err := ConvertUnstructured[CAPIRoleBinding](obj)
@@ -223,7 +223,7 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	w.CAPIClusterRoleBindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			if !w.initialProcessingComplete {
-				klog.V(5).Infof("Skipping CAPIRole add event during initial processing")
+				klog.V(5).Infof("Skipping CAPIClusterRoleBinding add event during initial processing")
 				return
 			}
 			capiClusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](obj)
