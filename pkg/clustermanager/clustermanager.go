@@ -175,8 +175,14 @@ func NewSecretController(clusterManager *ClusterManager, namespace, secretName s
 				klog.Errorf("Unexpected object type in UpdateFunc: expected Secret, got %T", new)
 				return
 			}
+			oldSecret, ok := old.(*corev1.Secret)
+			if !ok {
+				klog.Errorf("Unexpected object type in UpdateFunc: expected Secret, got %T", old)
+				return
+			}
+
 			// Only process the specific secret we're interested in
-			if newSecret.Name == secretName {
+			if newSecret.Name == secretName && oldSecret.ResourceVersion != newSecret.ResourceVersion {
 				controller.queue.Add(newSecret)
 			}
 		},
