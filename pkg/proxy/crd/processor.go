@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Improwised/kube-oidc-proxy/constants"
-	"github.com/Improwised/kube-oidc-proxy/pkg/proxy"
+	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,14 +28,14 @@ func ConvertUnstructured[T any](obj interface{}) (*T, error) {
 	return &result, nil
 }
 
-func determineTargetClusters(targetClusters []string, clusters []*proxy.ClusterConfig) []string {
+func determineTargetClusters(targetClusters []string, clusters []*cluster.Cluster) []string {
 	if len(targetClusters) == 1 && targetClusters[0] == "*" {
 		return getAllClusterNames(clusters)
 	}
 	return targetClusters
 }
 
-func getAllClusterNames(clusters []*proxy.ClusterConfig) []string {
+func getAllClusterNames(clusters []*cluster.Cluster) []string {
 	names := make([]string, 0, len(clusters))
 	for _, c := range clusters {
 		names = append(names, c.Name)
@@ -43,7 +43,7 @@ func getAllClusterNames(clusters []*proxy.ClusterConfig) []string {
 	return names
 }
 
-func applyToClusters(targetClusters []string, allClusters []*proxy.ClusterConfig, applyFunc func(*proxy.ClusterConfig)) {
+func applyToClusters(targetClusters []string, allClusters []*cluster.Cluster, applyFunc func(*cluster.Cluster)) {
 	for _, clusterName := range targetClusters {
 		for _, c := range allClusters {
 			if c.Name == clusterName {
@@ -196,7 +196,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIRole(capiRole *CAPIRole) {
 	for _, namespace := range capiRole.Spec.TargetNamespaces {
 		role := createRole(capiRole, namespace)
 
-		applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
+		applyToClusters(targetClusters, ctrl.clusters, func(c *cluster.Cluster) {
 			ctrl.addOrUpdateRole(c, role)
 		})
 	}
@@ -210,7 +210,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRole(capiClusterRole *CAPICluster
 	}
 
 	clusterRole := createClusterRole(capiClusterRole)
-	applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
+	applyToClusters(targetClusters, ctrl.clusters, func(c *cluster.Cluster) {
 		ctrl.addOrUpdateClusterRole(c, clusterRole)
 		// Re-evaluate existing RoleBindings that might reference this ClusterRole
 		ctrl.reevaluateRoleBindingsForClusterRole(c, clusterRole.Name)
@@ -226,7 +226,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRoleBinding(capiClusterRoleBindin
 
 	clusterRoleBindings := createClusterRoleBinding(capiClusterRoleBinding)
 
-	applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
+	applyToClusters(targetClusters, ctrl.clusters, func(c *cluster.Cluster) {
 		for _, crb := range clusterRoleBindings {
 			ctrl.addOrUpdateClusterRoleBinding(c, crb)
 		}
@@ -243,7 +243,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIRoleBinding(capiRoleBinding *CAPIRoleBin
 	for _, namespace := range capiRoleBinding.Spec.TargetNamespaces {
 		roleBindings := createRoleBinding(capiRoleBinding, namespace, ctrl)
 
-		applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
+		applyToClusters(targetClusters, ctrl.clusters, func(c *cluster.Cluster) {
 			for _, rb := range roleBindings {
 				ctrl.addOrUpdateRoleBinding(c, rb)
 			}
@@ -254,7 +254,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIRoleBinding(capiRoleBinding *CAPIRoleBin
 func (ctrl *CAPIRbacWatcher) DeleteCAPIRole(capiRole *CAPIRole) {
 	targetClusters := determineTargetClusters(capiRole.Spec.CommonRoleSpec.TargetClusters, ctrl.clusters)
 	for _, namespace := range capiRole.Spec.TargetNamespaces {
-		applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
+		applyToClusters(targetClusters, ctrl.clusters, func(c *cluster.Cluster) {
 			var newRoles []*v1.Role
 			for _, role := range c.RBACConfig.Roles {
 				if role.Annotations[fmt.Sprintf("%s/managed-by", constants.Group)] == capiRole.Name && role.Namespace == namespace {
@@ -269,7 +269,7 @@ func (ctrl *CAPIRbacWatcher) DeleteCAPIRole(capiRole *CAPIRole) {
 
 func (ctrl *CAPIRbacWatcher) DeleteCAPIClusterRole(capiClusterRole *CAPIClusterRole) {
 	targetClusters := determineTargetClusters(capiClusterRole.Spec.CommonRoleSpec.TargetClusters, ctrl.clusters)
-	applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
+	applyToClusters(targetClusters, ctrl.clusters, func(c *cluster.Cluster) {
 		var newClusterRoles []*v1.ClusterRole
 		for _, cr := range c.RBACConfig.ClusterRoles {
 			if cr.Annotations[fmt.Sprintf("%s/managed-by", constants.Group)] == capiClusterRole.Name {
@@ -284,7 +284,7 @@ func (ctrl *CAPIRbacWatcher) DeleteCAPIClusterRole(capiClusterRole *CAPIClusterR
 func (ctrl *CAPIRbacWatcher) DeleteCAPIRoleBinding(capiRoleBinding *CAPIRoleBinding) {
 	targetClusters := determineTargetClusters(capiRoleBinding.Spec.CommonBindingSpec.TargetClusters, ctrl.clusters)
 	for _, namespace := range capiRoleBinding.Spec.TargetNamespaces {
-		applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
+		applyToClusters(targetClusters, ctrl.clusters, func(c *cluster.Cluster) {
 			var newRoleBindings []*v1.RoleBinding
 			for _, rb := range c.RBACConfig.RoleBindings {
 				if rb.Annotations[fmt.Sprintf("%s/managed-by", constants.Group)] == capiRoleBinding.Name && rb.Namespace == namespace {
@@ -299,7 +299,7 @@ func (ctrl *CAPIRbacWatcher) DeleteCAPIRoleBinding(capiRoleBinding *CAPIRoleBind
 
 func (ctrl *CAPIRbacWatcher) DeleteCAPIClusterRoleBinding(capiClusterRoleBinding *CAPIClusterRoleBinding) {
 	targetClusters := determineTargetClusters(capiClusterRoleBinding.Spec.CommonBindingSpec.TargetClusters, ctrl.clusters)
-	applyToClusters(targetClusters, ctrl.clusters, func(c *proxy.ClusterConfig) {
+	applyToClusters(targetClusters, ctrl.clusters, func(c *cluster.Cluster) {
 		var newClusterRoleBindings []*v1.ClusterRoleBinding
 		for _, crb := range c.RBACConfig.ClusterRoleBindings {
 			if crb.Annotations[fmt.Sprintf("%s/managed-by", constants.Group)] == capiClusterRoleBinding.Name {
@@ -309,6 +309,55 @@ func (ctrl *CAPIRbacWatcher) DeleteCAPIClusterRoleBinding(capiClusterRoleBinding
 		}
 		c.RBACConfig.ClusterRoleBindings = newClusterRoleBindings
 	})
+}
+
+func (ctrl CAPIRbacWatcher) ProcessExistingRBACObjects() {
+	// Process existing CAPIRoles
+	existingCAPIRoles := ctrl.CAPIRoleInformer.GetStore().List()
+	for _, obj := range existingCAPIRoles {
+		role, err := ConvertUnstructured[CAPIRole](obj)
+		if err != nil {
+			klog.Errorf("Failed to convert CAPIRole: %v", err)
+			continue
+		}
+		ctrl.ProcessCAPIRole(role)
+	}
+
+	// Process existing CAPIRoleBindings
+	existingCAPIRoleBindings := ctrl.CAPIRoleBindingInformer.GetStore().List()
+	for _, obj := range existingCAPIRoleBindings {
+		roleBinding, err := ConvertUnstructured[CAPIRoleBinding](obj)
+		if err != nil {
+			klog.Errorf("Failed to convert CAPIRoleBinding: %v", err)
+			continue
+		}
+		ctrl.ProcessCAPIRoleBinding(roleBinding)
+	}
+
+	// Process existing CAPIClusterRoles
+	existingCAPIClusterRoles := ctrl.CAPIClusterRoleInformer.GetStore().List()
+	for _, obj := range existingCAPIClusterRoles {
+		clusterRole, err := ConvertUnstructured[CAPIClusterRole](obj)
+		if err != nil {
+			klog.Errorf("Failed to convert CAPIClusterRole: %v", err)
+			continue
+		}
+		ctrl.ProcessCAPIClusterRole(clusterRole)
+	}
+
+	// Process existing CAPIClusterRoleBindings
+	existingCAPIClusterRoleBindings := ctrl.CAPIClusterRoleBindingInformer.GetStore().List()
+	for _, obj := range existingCAPIClusterRoleBindings {
+		clusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](obj)
+		if err != nil {
+			klog.Errorf("Failed to convert CAPIClusterRoleBinding: %v", err)
+			continue
+		}
+		ctrl.ProcessCAPIClusterRoleBinding(clusterRoleBinding)
+	}
+
+	// Rebuild authorizers for all clusters
+	ctrl.RebuildAllAuthorizers()
 }
 
 // rebuildAllAuthorizers updates RBAC authorizers for all clusters.
@@ -326,7 +375,7 @@ func (ctrl *CAPIRbacWatcher) RebuildAllAuthorizers() {
 }
 
 // Helper functions to prevent duplication
-func (ctrl *CAPIRbacWatcher) addOrUpdateRole(cluster *proxy.ClusterConfig, role *v1.Role) {
+func (ctrl *CAPIRbacWatcher) addOrUpdateRole(cluster *cluster.Cluster, role *v1.Role) {
 	for i, existingRole := range cluster.RBACConfig.Roles {
 		if existingRole.Name == role.Name && existingRole.Namespace == role.Namespace {
 			cluster.RBACConfig.Roles[i] = role
@@ -336,7 +385,7 @@ func (ctrl *CAPIRbacWatcher) addOrUpdateRole(cluster *proxy.ClusterConfig, role 
 	cluster.RBACConfig.Roles = append(cluster.RBACConfig.Roles, role)
 }
 
-func (ctrl *CAPIRbacWatcher) addOrUpdateClusterRole(cluster *proxy.ClusterConfig, clusterRole *v1.ClusterRole) {
+func (ctrl *CAPIRbacWatcher) addOrUpdateClusterRole(cluster *cluster.Cluster, clusterRole *v1.ClusterRole) {
 	for i, existingCR := range cluster.RBACConfig.ClusterRoles {
 		if existingCR.Name == clusterRole.Name {
 			cluster.RBACConfig.ClusterRoles[i] = clusterRole
@@ -346,7 +395,7 @@ func (ctrl *CAPIRbacWatcher) addOrUpdateClusterRole(cluster *proxy.ClusterConfig
 	cluster.RBACConfig.ClusterRoles = append(cluster.RBACConfig.ClusterRoles, clusterRole)
 }
 
-func (ctrl *CAPIRbacWatcher) addOrUpdateRoleBinding(cluster *proxy.ClusterConfig, roleBinding *v1.RoleBinding) {
+func (ctrl *CAPIRbacWatcher) addOrUpdateRoleBinding(cluster *cluster.Cluster, roleBinding *v1.RoleBinding) {
 	for i, existingRB := range cluster.RBACConfig.RoleBindings {
 		if existingRB.Name == roleBinding.Name && existingRB.Namespace == roleBinding.Namespace {
 			cluster.RBACConfig.RoleBindings[i] = roleBinding
@@ -356,7 +405,7 @@ func (ctrl *CAPIRbacWatcher) addOrUpdateRoleBinding(cluster *proxy.ClusterConfig
 	cluster.RBACConfig.RoleBindings = append(cluster.RBACConfig.RoleBindings, roleBinding)
 }
 
-func (ctrl *CAPIRbacWatcher) addOrUpdateClusterRoleBinding(cluster *proxy.ClusterConfig, clusterRoleBinding *v1.ClusterRoleBinding) {
+func (ctrl *CAPIRbacWatcher) addOrUpdateClusterRoleBinding(cluster *cluster.Cluster, clusterRoleBinding *v1.ClusterRoleBinding) {
 	for i, existingCRB := range cluster.RBACConfig.ClusterRoleBindings {
 		if existingCRB.Name == clusterRoleBinding.Name {
 			cluster.RBACConfig.ClusterRoleBindings[i] = clusterRoleBinding
@@ -367,7 +416,7 @@ func (ctrl *CAPIRbacWatcher) addOrUpdateClusterRoleBinding(cluster *proxy.Cluste
 }
 
 // Re-evaluate RoleBindings when a new ClusterRole is added
-func (ctrl *CAPIRbacWatcher) reevaluateRoleBindingsForClusterRole(cluster *proxy.ClusterConfig, clusterRoleName string) {
+func (ctrl *CAPIRbacWatcher) reevaluateRoleBindingsForClusterRole(cluster *cluster.Cluster, clusterRoleName string) {
 	for i, rb := range cluster.RBACConfig.RoleBindings {
 		// Check if this RoleBinding references the new ClusterRole but has wrong Kind
 		if rb.RoleRef.Name == clusterRoleName && rb.RoleRef.Kind == "Role" {
