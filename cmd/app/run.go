@@ -23,6 +23,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/crd"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -71,8 +72,13 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				}
 			}
 
+			rbacAuthorizer := authorizer.NewRBACAuthorizer()
+
 			// Initialize CAPI RBAC watcher if available
-			capiRBACWatcher, err := crd.NewCAPIRbacWatcher(clusterConfigs)
+			capiRBACWatcher, err := crd.NewCAPIRbacWatcher(clusterConfigs, func(rbacConfig *util.RBAC, clusterName string) {
+				rbacAuthorizer.UpdatePermissionTrie(rbacConfig, clusterName)
+			})
+
 			if err != nil {
 				klog.Errorf("Failed to initialize CAPI RBAC watcher: %v", err)
 				capiRBACWatcher = nil // Continue without watcher if initialization fails
@@ -85,6 +91,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				opts.App.TokenPassthrough.Audiences,
 				clusterRBACConfigs,
 				capiRBACWatcher,
+				rbacAuthorizer,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create cluster manager: %w", err)

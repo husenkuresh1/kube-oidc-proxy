@@ -14,6 +14,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -59,6 +60,8 @@ type ClusterManager struct {
 
 	// secretController is the controller that watches for secret changes
 	secretController *SecretController
+
+	RBACAuthorizer *authorizer.RBACAuthorizer
 }
 
 // SecretController is a Kubernetes controller that watches for changes to secrets
@@ -97,7 +100,7 @@ type SecretController struct {
 // Returns:
 //   - A new ClusterManager instance and nil error on success
 //   - nil and an error if configuration fails
-func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher) (*ClusterManager, error) {
+func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher, rbacAuthorizer *authorizer.RBACAuthorizer) (*ClusterManager, error) {
 	// Build Kubernetes configuration for the management cluster
 	config, err := util.BuildConfiguration()
 	if err != nil {
@@ -119,6 +122,7 @@ func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, aud
 		audiences:               audiences,
 		clustersRoleConfigMap:   clustersRoleConfigMap,
 		capiRbacWatcher:         capiRbacWatcher,
+		RBACAuthorizer:          rbacAuthorizer,
 	}, nil
 }
 
@@ -398,49 +402,54 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 	}
 
 	// Process each cluster configuration in the secret
+	var wg sync.WaitGroup
 	for clusterName, kubeconfigData := range secret.Data {
-		// Parse the kubeconfig data to create a REST config
-		restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigData)
-		if err != nil {
-			klog.Errorf("Failed to create REST config for cluster %s: %v", clusterName, err)
-			continue
-		}
-
-		// Create a new cluster object
-		newCluster := &cluster.Cluster{
-			Name:       clusterName,
-			RestConfig: restConfig,
-			IsStatic:   false, // Mark as dynamic cluster
-		}
-
-		// Set up the cluster with necessary components
-		if err = cm.ClusterSetup(newCluster); err != nil {
-			klog.Errorf("Failed to set up cluster %s: %v", clusterName, err)
-			continue
-		}
-
-		// Run additional setup if a setup function is provided
-		if cm.SetupFunc != nil {
-			if err := cm.SetupFunc(newCluster); err != nil {
-				klog.Errorf("Additional setup failed for cluster %s: %v", clusterName, err)
-				continue
+		wg.Add(1)
+		go func(clusterName string, kubeconfigData []byte, cm *ClusterManager) {
+			defer wg.Done()
+			restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigData)
+			if err != nil {
+				klog.Errorf("Failed to create REST config for cluster %s: %v", clusterName, err)
+				return
 			}
-		}
 
-		// Add or update the cluster in the manager
-		cm.AddOrUpdateCluster(newCluster)
-		klog.V(4).Infof("Successfully added/updated dynamic cluster %s", clusterName)
+			// Create a new cluster object
+			newCluster := &cluster.Cluster{
+				Name:       clusterName,
+				RestConfig: restConfig,
+				IsStatic:   false, // Mark as dynamic cluster
+			}
 
-		// Update CAPI RBAC watcher if available
-		if cm.capiRbacWatcher != nil {
-			// Update watcher with the latest set of clusters
-			cm.capiRbacWatcher.UpdateClusters(cm.GetAllClusters())
+			// Set up the cluster with necessary components
+			if err = cm.ClusterSetup(newCluster); err != nil {
+				klog.Errorf("Failed to set up cluster %s: %v", clusterName, err)
+				return
+			}
 
-			// Reprocess RBAC objects for the new/updated cluster
-			cm.capiRbacWatcher.ProcessExistingRBACObjects()
-		}
+			// Run additional setup if a setup function is provided
+			if cm.SetupFunc != nil {
+				if err := cm.SetupFunc(newCluster); err != nil {
+					klog.Errorf("Additional setup failed for cluster %s: %v", clusterName, err)
+					return
+				}
+			}
+
+			// Add or update the cluster in the manager
+			cm.AddOrUpdateCluster(newCluster)
+			klog.V(4).Infof("Successfully added/updated dynamic cluster %s", clusterName)
+
+			// Update CAPI RBAC watcher if available
+			if cm.capiRbacWatcher != nil {
+				// Update watcher with the latest set of clusters
+				cm.capiRbacWatcher.UpdateClusters(cm.GetAllClusters())
+
+				// Reprocess RBAC objects for the new/updated cluster
+				cm.capiRbacWatcher.ProcessExistingRBACObjects()
+			}
+		}(clusterName, kubeconfigData, cm)
 	}
 
+	wg.Wait()
 	return nil
 }
 
@@ -496,6 +505,9 @@ func (cm *ClusterManager) RemoveCluster(name string) {
 
 	// Check if the cluster exists before removing
 	if _, exists := cm.clusters[name]; exists {
+		// Remove all permissions for this cluster from the trie
+		cm.RBACAuthorizer.RemoveClusterPermissions(name)
+
 		delete(cm.clusters, name)
 		klog.Infof("Removed cluster: %s", name)
 	} else {
@@ -603,6 +615,9 @@ func (cm *ClusterManager) ClusterSetup(cluster *cluster.Cluster) error {
 	if err = rbac.LoadRBAC(cluster); err != nil {
 		return fmt.Errorf("failed to load RBAC configuration: %w", err)
 	}
+
+	// Update permission trie with cluster's RBAC config
+	cm.RBACAuthorizer.UpdatePermissionTrie(cluster.RBACConfig, cluster.Name)
 
 	klog.V(5).Infof("Cluster setup complete for cluster: %s", cluster.Name)
 	return nil

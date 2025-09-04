@@ -3,6 +3,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/logging"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
+	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 )
 
 func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
@@ -26,7 +28,8 @@ func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
 
 	handler = p.auditor.WithCustomAuditLog(handler)
 	// handler = p.auditor.WithRequest(handler)
-	handler = p.WithRBACHandler(handler)
+	handler = p.withCustomAuthorization(handler)
+	// handler = p.WithRBACHandler(handler)
 	handler = p.withImpersonateRequest(handler)
 	handler = p.withAuthenticateRequest(handler)
 
@@ -34,6 +37,64 @@ func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
 	p.hooks.AddPreShutdownHook("AuditBackend", p.auditor.Shutdown)
 
 	return handler
+}
+
+// withCustomAuthorization adds custom authorization middleware using our own RBACAuthorizer
+func (p *Proxy) withCustomAuthorization(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+
+		p.clusterManager.RBACAuthorizer.PrintTrie()
+
+		clusterName := p.GetClusterName(req.URL.Path)
+		req.URL.Path = strings.TrimPrefix(req.URL.Path, "/"+clusterName)
+
+		reqInfo, err := p.requestInfo.NewRequestInfo(req)
+		if err != nil {
+			p.handleError(rw, req, err)
+			fmt.Println("Error in request info ", err)
+			return
+		}
+
+		// skip validation in Excluded resourse
+		// Group: "authentication.k8s.io", Resource: "selfsubjectreviews",
+		// Group: "authentication.k8s.io", Resource: "tokenreviews",
+		// Group: "authorization.k8s.io", Resource: "localsubjectaccessreviews",
+		// Group: "authorization.k8s.io", Resource: "selfsubjectaccessreviews",
+		// Group: "authorization.k8s.io", Resource: "selfsubjectrulesreviews",
+		// Group: "authorization.k8s.io", Resource: "subjectaccessreviews",
+		for _, groupResource := range exclusion.Excluded() {
+			if groupResource.Group == reqInfo.APIGroup && groupResource.Resource == reqInfo.Resource {
+				req.URL.Path = "/" + clusterName + req.URL.Path
+				handler.ServeHTTP(rw, req)
+				return
+			}
+		}
+		req = req.WithContext(context.WithRequestInfo(req.Context(), reqInfo))
+		if reqInfo.IsResourceRequest {
+
+			user, ok := genericapirequest.UserFrom(req.Context())
+			if !ok {
+				p.handleError(rw, req, errUnauthorized)
+				return
+			}
+
+			// Check permission using our custom authorizer
+			authorized := p.clusterManager.RBACAuthorizer.CheckPermission(authorizer.SubjectTypeUser, user.GetName(), clusterName, reqInfo.Namespace, reqInfo.Resource, reqInfo.Verb)
+
+			if !authorized {
+				klog.V(10).Infof("user %s not authorized to %s %s in namespace %s", user.GetName(), reqInfo.Verb, reqInfo.Resource, reqInfo.Namespace)
+				p.handleError(rw, req, errUnauthorized)
+				return
+			}
+		}
+
+		// Eg. non resource request
+		// 		/api
+		//		/version etc..
+		req.URL.Path = "/" + clusterName + req.URL.Path
+		handler.ServeHTTP(rw, req)
+
+	})
 }
 
 func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
@@ -70,6 +131,7 @@ func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 		// validate resource request
 		if reqInfo.IsResourceRequest {
 			authHandler := genericapifilters.WithAuthorization(handler, ClusterConfig.Authorizer, scheme.Codecs)
+
 			req.URL.Path = "/" + clusterName + req.URL.Path
 			authHandler.ServeHTTP(rw, req)
 			return
@@ -80,7 +142,6 @@ func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 		//		/version etc..
 		req.URL.Path = "/" + clusterName + req.URL.Path
 		handler.ServeHTTP(rw, req)
-
 	})
 }
 

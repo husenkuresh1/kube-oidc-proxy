@@ -12,6 +12,9 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// OnRBACUpdateFunc defines a function type for RBAC update callbacks
+type OnRBACUpdateFunc func(rbacConfig *util.RBAC, clusterName string)
+
 type CAPIRbacWatcher struct {
 	CAPIClusterRoleInformer        cache.SharedIndexInformer
 	CAPIRoleInformer               cache.SharedIndexInformer
@@ -19,9 +22,10 @@ type CAPIRbacWatcher struct {
 	CAPIRoleBindingInformer        cache.SharedIndexInformer
 	clusters                       []*cluster.Cluster
 	initialProcessingComplete      bool
+	onRBACUpdate                   OnRBACUpdateFunc
 }
 
-func NewCAPIRbacWatcher(clusters []*cluster.Cluster) (*CAPIRbacWatcher, error) {
+func NewCAPIRbacWatcher(clusters []*cluster.Cluster, onRBACUpdate OnRBACUpdateFunc) (*CAPIRbacWatcher, error) {
 
 	clusterConfig, err := util.BuildConfiguration()
 	if err != nil {
@@ -47,6 +51,7 @@ func NewCAPIRbacWatcher(clusters []*cluster.Cluster) (*CAPIRbacWatcher, error) {
 		CAPIRoleBindingInformer:        capiRoleBindingInformer,
 		CAPIClusterRoleBindingInformer: capiClusterRoleBindingInformer,
 		clusters:                       clusters,
+		onRBACUpdate:                   onRBACUpdate,
 	}
 
 	watcher.RegisterEventHandlers()

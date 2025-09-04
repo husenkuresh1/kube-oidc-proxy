@@ -311,7 +311,7 @@ func (ctrl *CAPIRbacWatcher) DeleteCAPIClusterRoleBinding(capiClusterRoleBinding
 	})
 }
 
-func (ctrl CAPIRbacWatcher) ProcessExistingRBACObjects() {
+func (ctrl *CAPIRbacWatcher) ProcessExistingRBACObjects() {
 
 	// Process existing CAPIRoles
 	existingCAPIRoles := ctrl.CAPIRoleInformer.GetStore().List()
@@ -375,6 +375,8 @@ func (ctrl *CAPIRbacWatcher) RebuildAllAuthorizers() {
 		)
 		klog.Infof("Rebuilding authorizer for cluster: %s", c.Name)
 		c.Authorizer = util.NewAuthorizer(staticRoles)
+
+		ctrl.onRBACUpdate(c.RBACConfig, c.Name)
 	}
 }
 
