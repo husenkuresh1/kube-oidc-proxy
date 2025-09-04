@@ -14,7 +14,6 @@ import (
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
-	"github.com/Improwised/kube-oidc-proxy/pkg/clustermanager"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/hooks"
@@ -52,6 +51,14 @@ type Config struct {
 	ExtraUserHeadersClientIPEnabled bool
 }
 
+// ClusterManager interface for dependency injection
+type ClusterManager interface {
+	AddOrUpdateCluster(cluster *cluster.Cluster)
+	GetCluster(name string) *cluster.Cluster
+	GetAllClusters() []*cluster.Cluster
+	RemoveCluster(name string)
+}
+
 type errorHandlerFn func(http.ResponseWriter, *http.Request, error)
 
 type Proxy struct {
@@ -59,7 +66,7 @@ type Proxy struct {
 	tokenAuther       authenticator.Token
 	secureServingInfo *server.SecureServingInfo
 	auditor           *audit.Audit
-	clusterManager    *clustermanager.ClusterManager
+	clusterManager    ClusterManager
 	config            *Config
 
 	hooks       *hooks.Hooks
@@ -84,7 +91,7 @@ func New(
 	auditOptions *options.AuditOptions,
 	ssinfo *server.SecureServingInfo,
 	config *Config,
-	clusterManager *clustermanager.ClusterManager) (*Proxy, error) {
+	clusterManager ClusterManager) (*Proxy, error) {
 
 	// load the CA from the file listed in the options
 	caFromFile := CAFromFile{
