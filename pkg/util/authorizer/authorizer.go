@@ -1,7 +1,7 @@
 package authorizer
 
 import (
-	"fmt"
+	"sync"
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
 	v1 "k8s.io/api/rbac/v1"
@@ -9,143 +9,95 @@ import (
 
 type RBACAuthorizer struct {
 	trie *PermissionTrie
+	mu   sync.RWMutex
 }
 
 func NewRBACAuthorizer() *RBACAuthorizer {
-	trie := NewPermissionTrie()
 	return &RBACAuthorizer{
-		trie: trie,
+		trie: NewPermissionTrie(),
 	}
 }
 
-// UpdatePermissionTrie updates the permission trie with the RBAC configuration for a cluster
 func (a *RBACAuthorizer) UpdatePermissionTrie(rbacConfig *util.RBAC, clusterName string) {
-	// Process Roles and RoleBindings
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	// Clear existing permissions for this cluster
+	a.trie.RemoveCluster(clusterName)
+
+	// Process Roles and their bindings
 	for _, role := range rbacConfig.Roles {
-		// Get all subjects bound to this role
-		subjects := getSubjectsForRole(role, rbacConfig.RoleBindings)
-		for _, subject := range subjects {
-			subjectType := SubjectType(subject.Kind)
-			for _, rule := range role.Rules {
-				for _, verb := range rule.Verbs {
-					for _, resource := range rule.Resources {
-						a.trie.AddPermission(
-							subjectType,
-							subject.Name,
-							clusterName,
-							role.Namespace,
-							resource,
-							verb,
-						)
-					}
-				}
-			}
-		}
+		subjects := getBoundSubjects(role.Name, "Role", rbacConfig.RoleBindings, role.Namespace)
+		a.processRules(role.Rules, subjects, clusterName, role.Namespace)
 	}
 
-	// Process ClusterRoles and ClusterRoleBindings
+	// Process ClusterRoles and their bindings
 	for _, clusterRole := range rbacConfig.ClusterRoles {
-		// Get all subjects bound to this cluster role
-		subjects := getSubjectsForClusterRole(clusterRole, rbacConfig.ClusterRoleBindings)
-		for _, subject := range subjects {
-			subjectType := SubjectType(subject.Kind)
-			for _, rule := range clusterRole.Rules {
+		subjects := getBoundSubjects(clusterRole.Name, "ClusterRole", rbacConfig.ClusterRoleBindings, "")
+		a.processRules(clusterRole.Rules, subjects, clusterName, "")
+	}
+}
+
+func (a *RBACAuthorizer) processRules(rules []v1.PolicyRule, subjects []v1.Subject, clusterName, namespace string) {
+	for _, subject := range subjects {
+		subjectType := toSubjectType(subject.Kind)
+		for _, rule := range rules {
+			for _, resource := range rule.Resources {
 				for _, verb := range rule.Verbs {
-					for _, resource := range rule.Resources {
-						a.trie.AddPermission(
-							subjectType,
-							subject.Name,
-							clusterName,
-							"", // cluster-wide namespace
-							resource,
-							verb,
-						)
-					}
+					a.trie.AddPermission(
+						subjectType,
+						subject.Name,
+						clusterName,
+						namespace,
+						resource,
+						verb,
+					)
 				}
 			}
 		}
 	}
 }
 
-// RemoveClusterPermissions removes all permissions for a cluster
-func (a *RBACAuthorizer) RemoveClusterPermissions(cluster string) {
-	for subjectKey, subjectNode := range a.trie.subjectNodes {
-		if _, exists := subjectNode.clusterNodes[cluster]; exists {
-			delete(subjectNode.clusterNodes, cluster)
-
-			// Remove subject if no clusters left
-			if len(subjectNode.clusterNodes) == 0 {
-				delete(a.trie.subjectNodes, subjectKey)
-			}
-		}
-	}
+func (a *RBACAuthorizer) RemoveClusterPermissions(clusterName string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.trie.RemoveCluster(clusterName)
 }
 
-// Helper to get subjects for a role
-func getSubjectsForRole(role *v1.Role, bindings []*v1.RoleBinding) []v1.Subject {
-	var subjects []v1.Subject
-	for _, binding := range bindings {
-		if binding.RoleRef.Name == role.Name && binding.RoleRef.Kind == "Role" {
-			subjects = append(subjects, binding.Subjects...)
-		}
-	}
-	return subjects
-}
-
-// Helper to get subjects for a cluster role
-func getSubjectsForClusterRole(clusterRole *v1.ClusterRole, bindings []*v1.ClusterRoleBinding) []v1.Subject {
-	var subjects []v1.Subject
-	for _, binding := range bindings {
-		if binding.RoleRef.Name == clusterRole.Name && binding.RoleRef.Kind == "ClusterRole" {
-			subjects = append(subjects, binding.Subjects...)
-		}
-	}
-	return subjects
-}
-
-// CheckPermission checks if a subject has permission to perform an action on a resource
 func (a *RBACAuthorizer) CheckPermission(subjectType SubjectType, subjectName, cluster, namespace, resource, verb string) bool {
-	subjectKey := getSubjectKey(subjectType, subjectName)
-	subjectNode, exists := a.trie.subjectNodes[subjectKey]
-	if !exists {
-		return false
-	}
-
-	clusterNode, exists := subjectNode.clusterNodes[cluster]
-	if !exists {
-		return false
-	}
-
-	// Check cluster-wide permissions (empty namespace)
-	if namespaceNode, exists := clusterNode.namespaceNodes[""]; exists {
-		if resourceNode, exists := namespaceNode.resourceNodes[resource]; exists {
-			if _, hasVerb := resourceNode.verbs[verb]; hasVerb {
-				return true
-			}
-		}
-	}
-
-	// Check namespace-specific permissions
-	if namespaceNode, exists := clusterNode.namespaceNodes[namespace]; exists {
-		if resourceNode, exists := namespaceNode.resourceNodes[resource]; exists {
-			if _, hasVerb := resourceNode.verbs[verb]; hasVerb {
-				return true
-			}
-		}
-	}
-
-	return false
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.trie.CheckPermission(subjectType, subjectName, cluster, namespace, resource, verb)
 }
 
-func (t *RBACAuthorizer) PrintTrie() {
-
-	if len(t.trie.subjectNodes) == 0 {
-		fmt.Println("PermissionTrie is empty")
-		return
+func getBoundSubjects(roleName, roleKind string, bindings interface{}, namespace string) []v1.Subject {
+	var subjects []v1.Subject
+	switch b := bindings.(type) {
+	case []*v1.RoleBinding:
+		for _, binding := range b {
+			if binding.RoleRef.Name == roleName && binding.RoleRef.Kind == roleKind && binding.Namespace == namespace {
+				subjects = append(subjects, binding.Subjects...)
+			}
+		}
+	case []*v1.ClusterRoleBinding:
+		for _, binding := range b {
+			if binding.RoleRef.Name == roleName && binding.RoleRef.Kind == roleKind {
+				subjects = append(subjects, binding.Subjects...)
+			}
+		}
 	}
+	return subjects
+}
 
-	for subjectKey, subjectNode := range t.trie.subjectNodes {
-		fmt.Printf("Subject: %s\n", subjectKey)
-		subjectNode.printClusterNodes(1)
+func toSubjectType(kind string) SubjectType {
+	switch kind {
+	case "User":
+		return SubjectTypeUser
+	case "Group":
+		return SubjectTypeGroup
+	case "ServiceAccount":
+		return SubjectTypeServiceAccount
+	default:
+		return SubjectType(kind)
 	}
 }
