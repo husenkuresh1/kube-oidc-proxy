@@ -1,6 +1,7 @@
 package crd
 
 import (
+	"sync"
 	"time"
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
@@ -18,6 +19,7 @@ type CAPIRbacWatcher struct {
 	CAPIClusterRoleBindingInformer cache.SharedIndexInformer
 	CAPIRoleBindingInformer        cache.SharedIndexInformer
 	clusters                       []*cluster.Cluster
+	mu                             sync.RWMutex
 }
 
 func NewCAPIRbacWatcher(clusters []*cluster.Cluster) (*CAPIRbacWatcher, error) {
