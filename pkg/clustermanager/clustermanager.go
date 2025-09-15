@@ -51,9 +51,6 @@ type ClusterManager struct {
 	// capiRbacWatcher watches for CAPI RBAC changes and applies them to clusters
 	capiRbacWatcher *crd.CAPIRbacWatcher
 
-	// stopCh is a channel used to signal the manager to stop watching for changes
-	stopCh <-chan struct{}
-
 	// maxGoroutines limits concurrent cluster initialization operations
 	maxGoroutines int
 
@@ -94,7 +91,6 @@ type SecretController struct {
 // NewClusterManager creates a new ClusterManager instance with the provided configuration.
 //
 // Parameters:
-//   - stopCh: Channel used to signal when to stop watching for cluster changes
 //   - tokenPassthroughEnabled: Whether to enable token passthrough for authentication
 //   - audiences: List of valid token audiences for token review
 //   - clustersRoleConfigMap: Map of cluster names to their RBAC configurations
@@ -105,7 +101,7 @@ type SecretController struct {
 // Returns:
 //   - A new ClusterManager instance and nil error on success
 //   - nil and an error if configuration fails
-func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher, maxGoroutines int, rbacAuthorizer *authorizer.RBACAuthorizer) (*ClusterManager, error) {
+func NewClusterManager(tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher, maxGoroutines int, rbacAuthorizer *authorizer.RBACAuthorizer) (*ClusterManager, error) {
 	// Build Kubernetes configuration for the management cluster
 	config, err := util.BuildConfiguration()
 	if err != nil {
@@ -122,7 +118,6 @@ func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, aud
 	return &ClusterManager{
 		clusters:                make(map[string]*cluster.Cluster),
 		clientset:               client,
-		stopCh:                  stopCh,
 		tokenPassthroughEnabled: tokenPassthroughEnabled,
 		audiences:               audiences,
 		clustersRoleConfigMap:   clustersRoleConfigMap,

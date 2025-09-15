@@ -1,8 +1,6 @@
 package authorizer
 
 import (
-	"fmt"
-
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
 	v1 "k8s.io/api/rbac/v1"
 )
@@ -21,8 +19,6 @@ func NewRBACAuthorizer() *RBACAuthorizer {
 // UpdatePermissionTrie updates the permission trie with the RBAC configuration for a cluster
 func (a *RBACAuthorizer) UpdatePermissionTrie(rbacConfig *util.RBAC, clusterName string) {
 	// Process Roles and RoleBindings
-	fmt.Println("called")
-	fmt.Println(rbacConfig)
 	for _, role := range rbacConfig.Roles {
 		// Get all subjects bound to this role
 		subjects := getSubjectsForRole(role, rbacConfig.RoleBindings)

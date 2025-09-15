@@ -85,7 +85,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			// Create cluster manager to handle dynamic clusters
-			clusterManager, err := clustermanager.NewClusterManager(stopCh, opts.App.TokenPassthrough.Enabled, opts.App.TokenPassthrough.Audiences, clusterRBACConfigs, capiRBACWatcher, opts.App.MaxGoroutines, rbacAuthorizer)
+			clusterManager, err := clustermanager.NewClusterManager(opts.App.TokenPassthrough.Enabled, opts.App.TokenPassthrough.Audiences, clusterRBACConfigs, capiRBACWatcher, opts.App.MaxGoroutines, rbacAuthorizer)
 			if err != nil {
 				return fmt.Errorf("failed to create cluster manager: %w", err)
 			}
