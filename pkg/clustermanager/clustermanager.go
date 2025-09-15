@@ -14,6 +14,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -62,6 +63,8 @@ type ClusterManager struct {
 
 	// secretController is the controller that watches for secret changes
 	secretController *SecretController
+
+	RBACAuthorizer *authorizer.RBACAuthorizer
 }
 
 // SecretController is a Kubernetes controller that watches for changes to secrets
@@ -97,11 +100,12 @@ type SecretController struct {
 //   - clustersRoleConfigMap: Map of cluster names to their RBAC configurations
 //   - capiRbacWatcher: Watcher for CAPI RBAC changes
 //   - maxGoroutines: Maximum number of concurrent goroutines for cluster operations
+//   - rbacAuthorizer: RBAC authorizer for permission checking using a trie structure
 //
 // Returns:
 //   - A new ClusterManager instance and nil error on success
 //   - nil and an error if configuration fails
-func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher, maxGoroutines int) (*ClusterManager, error) {
+func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher, maxGoroutines int, rbacAuthorizer *authorizer.RBACAuthorizer) (*ClusterManager, error) {
 	// Build Kubernetes configuration for the management cluster
 	config, err := util.BuildConfiguration()
 	if err != nil {
@@ -124,6 +128,7 @@ func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, aud
 		clustersRoleConfigMap:   clustersRoleConfigMap,
 		capiRbacWatcher:         capiRbacWatcher,
 		maxGoroutines:           maxGoroutines,
+		RBACAuthorizer:          rbacAuthorizer,
 	}, nil
 }
 
@@ -510,6 +515,8 @@ func (cm *ClusterManager) RemoveCluster(name string) {
 
 	// Check if the cluster exists before removing
 	if _, exists := cm.clusters[name]; exists {
+		// Remove all permissions for this cluster from the trie
+		cm.RBACAuthorizer.RemoveClusterPermissions(name)
 		delete(cm.clusters, name)
 		klog.Infof("Removed cluster: %s", name)
 	} else {
@@ -618,6 +625,8 @@ func (cm *ClusterManager) ClusterSetup(cluster *cluster.Cluster) error {
 		return fmt.Errorf("failed to load RBAC configuration: %w", err)
 	}
 
+	cm.RBACAuthorizer.UpdatePermissionTrie(cluster.RBACConfig, cluster.Name)
+
 	klog.V(5).Infof("Cluster setup complete for cluster: %s", cluster.Name)
 	return nil
 }
@@ -663,4 +672,13 @@ func (cm *ClusterManager) StopSecretController() {
 		// The queue shutdown is handled in the Run method
 		klog.V(4).Info("Secret controller will stop when context is cancelled")
 	}
+}
+
+// CheckPermission checks if a subject has permission to perform an action on a resource
+func (cm *ClusterManager) CheckPermission(subjectType authorizer.SubjectType, subjectName, cluster, namespace, resource, verb string) bool {
+	if cm.RBACAuthorizer == nil {
+		klog.Warningf("RBACAuthorizer is nil, denying permission check for subject %s", subjectName)
+		return false
+	}
+	return cm.RBACAuthorizer.CheckPermission(subjectType, subjectName, cluster, namespace, resource, verb)
 }

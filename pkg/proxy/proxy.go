@@ -17,6 +17,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/hooks"
+	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/apis/apiserver"
@@ -57,6 +58,7 @@ type ClusterManager interface {
 	GetCluster(name string) *cluster.Cluster
 	GetAllClusters() []*cluster.Cluster
 	RemoveCluster(name string)
+	CheckPermission(subjectType authorizer.SubjectType, subjectName, cluster, namespace, resource, verb string) bool
 }
 
 type errorHandlerFn func(http.ResponseWriter, *http.Request, error)

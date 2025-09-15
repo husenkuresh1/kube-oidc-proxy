@@ -5,13 +5,11 @@ import (
 	"fmt"
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
-	"github.com/Improwised/kube-oidc-proxy/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/rbac/v1"
 	apisv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
-	rbacvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
 var defalutRole = map[string]v1.PolicyRule{
@@ -160,8 +158,6 @@ func LoadRBAC(cluster *cluster.Cluster) error {
 
 			}
 
-			updateAuthorizer(cluster)
-
 		}
 	}()
 	return nil
@@ -215,8 +211,6 @@ func loadExistingRBAC(cluster *cluster.Cluster) error {
 
 	}
 
-	updateAuthorizer(cluster)
-
 	return nil
 }
 
@@ -266,7 +260,7 @@ func setupRBACWatchers(cluster *cluster.Cluster) error {
 					}
 				}
 			}
-			updateAuthorizer(cluster)
+
 		}
 	}()
 
@@ -297,7 +291,7 @@ func setupRBACWatchers(cluster *cluster.Cluster) error {
 					}
 				}
 			}
-			updateAuthorizer(cluster)
+
 		}
 	}()
 
@@ -364,7 +358,7 @@ func watchNamespaceRoles(watchRoles watch.Interface, cluster *cluster.Cluster) {
 				}
 			}
 		}
-		updateAuthorizer(cluster)
+
 	}
 }
 
@@ -394,16 +388,5 @@ func watchNamespaceRoleBindings(watchRoleBindings watch.Interface, cluster *clus
 				}
 			}
 		}
-		updateAuthorizer(cluster)
 	}
-}
-
-func updateAuthorizer(cluster *cluster.Cluster) {
-	_, staticRoles := rbacvalidation.NewTestRuleResolver(
-		cluster.RBACConfig.Roles,
-		cluster.RBACConfig.RoleBindings,
-		cluster.RBACConfig.ClusterRoles,
-		cluster.RBACConfig.ClusterRoleBindings,
-	)
-	cluster.Authorizer = util.NewAuthorizer(staticRoles)
 }
