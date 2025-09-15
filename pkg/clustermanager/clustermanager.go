@@ -53,6 +53,9 @@ type ClusterManager struct {
 	// stopCh is a channel used to signal the manager to stop watching for changes
 	stopCh <-chan struct{}
 
+	// maxGoroutines limits concurrent cluster initialization operations
+	maxGoroutines int
+
 	// SetupFunc is an optional function called after a cluster is set up
 	// to perform additional configuration
 	SetupFunc func(*cluster.Cluster) error
@@ -93,11 +96,12 @@ type SecretController struct {
 //   - audiences: List of valid token audiences for token review
 //   - clustersRoleConfigMap: Map of cluster names to their RBAC configurations
 //   - capiRbacWatcher: Watcher for CAPI RBAC changes
+//   - maxGoroutines: Maximum number of concurrent goroutines for cluster operations
 //
 // Returns:
 //   - A new ClusterManager instance and nil error on success
 //   - nil and an error if configuration fails
-func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher) (*ClusterManager, error) {
+func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher, maxGoroutines int) (*ClusterManager, error) {
 	// Build Kubernetes configuration for the management cluster
 	config, err := util.BuildConfiguration()
 	if err != nil {
@@ -119,6 +123,7 @@ func NewClusterManager(stopCh <-chan struct{}, tokenPassthroughEnabled bool, aud
 		audiences:               audiences,
 		clustersRoleConfigMap:   clustersRoleConfigMap,
 		capiRbacWatcher:         capiRbacWatcher,
+		maxGoroutines:           maxGoroutines,
 	}, nil
 }
 
@@ -399,11 +404,14 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 
 	// Process each cluster configuration in the secret
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, cm.maxGoroutines)
 
 	for clusterName, kubeconfigData := range secret.Data {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			// Parse the kubeconfig data to create a REST config
 			restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigData)
 			if err != nil {

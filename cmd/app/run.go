@@ -54,7 +54,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			// Load and parse cluster configuration
 			clusterConfigs, err := LoadClusterConfig(opts.App.Cluster.Config)
 			if err != nil {
-				klog.Warningf("failed to load cluster config: %v", err)
+				klog.Warningf("failed to load cluster config: %v", err.Error())
 			}
 
 			var clusterRBACConfigs map[string]util.RBAC
@@ -85,13 +85,14 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 				opts.App.TokenPassthrough.Audiences,
 				clusterRBACConfigs,
 				capiRBACWatcher,
+				opts.App.MaxGoroutines,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create cluster manager: %w", err)
 			}
 
 			// Initialize each static cluster
-			initStaticClusters(clusterConfigs, clusterManager)
+			initStaticClusters(clusterConfigs, clusterManager, opts.App.MaxGoroutines)
 
 			// Start CAPI RBAC watcher if available
 			if capiRBACWatcher != nil {
@@ -232,6 +233,8 @@ func LoadClusterConfig(path string) ([]*cluster.Cluster, error) {
 	return clustersList, nil
 }
 
+// getCurrentNamespace determines the current Kubernetes namespace by looking for
+// services with the kube-oidc-proxy label selector, defaults to "kube-oidc-proxy"
 func getCurrentNamespace() string {
 	ns := "kube-oidc-proxy" //set namespace to kube-oidc-proxy as conventional assumtion
 
@@ -267,9 +270,11 @@ func getCurrentNamespace() string {
 	return ns
 }
 
-func initStaticClusters(clusterConfigs []*cluster.Cluster, clusterManager *clustermanager.ClusterManager) {
+// initStaticClusters initializes all static clusters concurrently with goroutine
+// limiting to prevent overwhelming the system with parallel cluster setups
+func initStaticClusters(clusterConfigs []*cluster.Cluster, clusterManager *clustermanager.ClusterManager, maxGoroutines int) {
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 10)
+	sem := make(chan struct{}, maxGoroutines)
 
 	for _, c := range clusterConfigs {
 		wg.Add(1)
