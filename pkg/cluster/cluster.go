@@ -10,6 +10,7 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
@@ -24,6 +25,7 @@ type Cluster struct {
 	TokenReviewer         *tokenreview.TokenReview                 // Token reviewer for validating tokens
 	SubjectAccessReviewer *subjectaccessreview.SubjectAccessReview // Reviewer for subject access requests
 	Authorizer            *rbac.RBACAuthorizer                     // RBAC authorizer for access control
+	CustomAuthorizer      *authorizer.RBACAuthorizer               // Custom RBAC authorizer for access control
 	RBACConfig            *util.RBAC                               // RBAC configuration for the cluster
 	ProxyHandler          *httputil.ReverseProxy                   // Reverse proxy handler for forwarding requests
 	ClientTransport       http.RoundTripper                        // Transport for authenticated requests

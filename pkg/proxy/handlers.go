@@ -35,6 +35,7 @@ func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
 	return handler
 }
 
+// withCustomAuthorization adds custom authorization middleware using our own RBACAuthorizer
 func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 
@@ -61,11 +62,7 @@ func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 				return
 			}
 		}
-
-		// add request info into context
 		req = req.WithContext(context.WithRequestInfo(req.Context(), reqInfo))
-
-		// validate resource request
 		if reqInfo.IsResourceRequest {
 			user, ok := genericapirequest.UserFrom(req.Context())
 			if !ok {

@@ -309,7 +309,8 @@ func (ctrl *CAPIRbacWatcher) DeleteCAPIClusterRoleBinding(capiClusterRoleBinding
 	})
 }
 
-func (ctrl CAPIRbacWatcher) ProcessExistingRBACObjects() {
+func (ctrl *CAPIRbacWatcher) ProcessExistingRBACObjects() {
+
 	// Process existing CAPIRoles
 	existingCAPIRoles := ctrl.CAPIRoleInformer.GetStore().List()
 	for _, obj := range existingCAPIRoles {
