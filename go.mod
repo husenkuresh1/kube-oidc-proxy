@@ -28,10 +28,7 @@ require (
 	sigs.k8s.io/kind v0.24.0
 )
 
-require (
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	k8s.io/controller-manager v0.32.0 // indirect
-)
+require github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 
 replace (
 	github.com/emicklei/go-restful => github.com/emicklei/go-restful/v3 v3.8.0
@@ -141,7 +138,6 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/component-helpers v0.32.0 // indirect
 	k8s.io/kms v0.32.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
