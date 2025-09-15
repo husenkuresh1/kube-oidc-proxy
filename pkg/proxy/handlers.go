@@ -71,7 +71,7 @@ func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 			}
 
 			// Check permission using our custom authorizer
-			authorized := p.clusterManager.CheckPermission(authorizer.SubjectTypeUser, user.GetName(), clusterName, reqInfo.Namespace, reqInfo.Resource, reqInfo.Verb)
+			authorized := p.clusterManager.CheckPermission(authorizer.SubjectTypeUser, user.GetName(), clusterName, reqInfo.Namespace, reqInfo.APIGroup, reqInfo.Resource, reqInfo.Verb)
 
 			if !authorized {
 				klog.V(10).Infof("user %s not authorized to %s %s in namespace %s", user.GetName(), reqInfo.Verb, reqInfo.Resource, reqInfo.Namespace)

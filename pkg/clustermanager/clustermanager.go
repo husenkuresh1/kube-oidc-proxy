@@ -675,10 +675,10 @@ func (cm *ClusterManager) StopSecretController() {
 }
 
 // CheckPermission checks if a subject has permission to perform an action on a resource
-func (cm *ClusterManager) CheckPermission(subjectType authorizer.SubjectType, subjectName, cluster, namespace, resource, verb string) bool {
+func (cm *ClusterManager) CheckPermission(subjectType authorizer.SubjectType, subjectName, cluster, namespace, apiGroup, resource, verb string) bool {
 	if cm.RBACAuthorizer == nil {
 		klog.Warningf("RBACAuthorizer is nil, denying permission check for subject %s", subjectName)
 		return false
 	}
-	return cm.RBACAuthorizer.CheckPermission(subjectType, subjectName, cluster, namespace, resource, verb)
+	return cm.RBACAuthorizer.CheckPermission(subjectType, subjectName, cluster, namespace, apiGroup, resource, verb)
 }

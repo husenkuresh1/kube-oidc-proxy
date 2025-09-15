@@ -30,15 +30,18 @@ func (a *RBACAuthorizer) UpdatePermissionTrie(rbacConfig *util.RBAC, clusterName
 			subjectType := SubjectType(subject.Kind)
 			for _, rule := range role.Rules {
 				for _, verb := range rule.Verbs {
-					for _, resource := range rule.Resources {
-						a.trie.AddPermission(
-							subjectType,
-							subject.Name,
-							clusterName,
-							role.Namespace,
-							resource,
-							verb,
-						)
+					for _, apiGroup := range rule.APIGroups {
+						for _, resource := range rule.Resources {
+							a.trie.AddPermission(
+								subjectType,
+								subject.Name,
+								clusterName,
+								role.Namespace,
+								apiGroup,
+								resource,
+								verb,
+							)
+						}
 					}
 				}
 			}
@@ -53,15 +56,18 @@ func (a *RBACAuthorizer) UpdatePermissionTrie(rbacConfig *util.RBAC, clusterName
 			subjectType := SubjectType(subject.Kind)
 			for _, rule := range clusterRole.Rules {
 				for _, verb := range rule.Verbs {
-					for _, resource := range rule.Resources {
-						a.trie.AddPermission(
-							subjectType,
-							subject.Name,
-							clusterName,
-							"", // cluster-wide namespace
-							resource,
-							verb,
-						)
+					for _, apiGroup := range rule.APIGroups {
+						for _, resource := range rule.Resources {
+							a.trie.AddPermission(
+								subjectType,
+								subject.Name,
+								clusterName,
+								"", // cluster-wide namespace
+								apiGroup,
+								resource,
+								verb,
+							)
+						}
 					}
 				}
 			}
@@ -107,41 +113,6 @@ func getSubjectsForClusterRole(clusterRole *v1.ClusterRole, bindings []*v1.Clust
 }
 
 // CheckPermission checks if a subject has permission to perform an action on a resource
-func (a *RBACAuthorizer) CheckPermission(subjectType SubjectType, subjectName, cluster, namespace, resource, verb string) bool {
-
-	subjectKey := getSubjectKey(subjectType, subjectName)
-	subjectNode, exists := a.trie.subjectNodes[subjectKey]
-	if !exists {
-		return false
-	}
-
-	clusterNode, exists := subjectNode.clusterNodes[cluster]
-	if !exists {
-		return false
-	}
-
-	var namespaceNode *NamespaceNode
-	var resourceNode *ResourceNode
-
-	namespaceNode, exists = clusterNode.namespaceNodes[""]
-	if !exists {
-		namespaceNode, exists = clusterNode.namespaceNodes[namespace]
-	}
-	if !exists {
-		return false
-	}
-
-	resourceNode, exists = namespaceNode.resourceNodes["*"]
-	if !exists {
-		resourceNode, exists = namespaceNode.resourceNodes[resource]
-	}
-	if !exists {
-		return false
-	}
-
-	if resourceNode.verbs["*"] || resourceNode.verbs[verb] {
-		return true
-	}
-
-	return false
+func (a *RBACAuthorizer) CheckPermission(subjectType SubjectType, subjectName, cluster, namespace, apiGroup, resource, verb string) bool {
+	return a.trie.CheckPermission(subjectType, subjectName, cluster, namespace, apiGroup, resource, verb)
 }
