@@ -188,7 +188,7 @@ func determineRoleRefKindAndAPIGroup(roleRef string, ctrl *CAPIRbacWatcher, name
 
 func (ctrl *CAPIRbacWatcher) ProcessCAPIRole(capiRole *CAPIRole) {
 	targetClusters := determineTargetClusters(capiRole.Spec.CommonRoleSpec.TargetClusters, ctrl.clusters)
-	if len(targetClusters) < 1 {
+	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
 		klog.Warning("skipping role ", capiRole.Name, " because it doesn't contain target clusters")
 		return
 	}
@@ -204,7 +204,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIRole(capiRole *CAPIRole) {
 
 func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRole(capiClusterRole *CAPIClusterRole) {
 	targetClusters := determineTargetClusters(capiClusterRole.Spec.CommonRoleSpec.TargetClusters, ctrl.clusters)
-	if len(targetClusters) < 1 {
+	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
 		klog.Warning("skipping cluster role ", capiClusterRole.Name, " because it doesn't contain target clusters")
 		return
 	}
@@ -219,7 +219,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRole(capiClusterRole *CAPICluster
 
 func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRoleBinding(capiClusterRoleBinding *CAPIClusterRoleBinding) {
 	targetClusters := determineTargetClusters(capiClusterRoleBinding.Spec.CommonBindingSpec.TargetClusters, ctrl.clusters)
-	if len(targetClusters) < 1 {
+	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
 		klog.Warning("skipping cluster role binding ", capiClusterRoleBinding.Name, " because it doesn't contain target clusters")
 		return
 	}
@@ -235,7 +235,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRoleBinding(capiClusterRoleBindin
 
 func (ctrl *CAPIRbacWatcher) ProcessCAPIRoleBinding(capiRoleBinding *CAPIRoleBinding) {
 	targetClusters := determineTargetClusters(capiRoleBinding.Spec.CommonBindingSpec.TargetClusters, ctrl.clusters)
-	if len(targetClusters) < 1 {
+	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
 		klog.Warning("skipping role binding ", capiRoleBinding.Name, " because it doesn't contain target clusters")
 		return
 	}
@@ -358,6 +358,7 @@ func (ctrl CAPIRbacWatcher) ProcessExistingRBACObjects() {
 
 	// Rebuild authorizers for all clusters
 	ctrl.RebuildAllAuthorizers()
+	ctrl.initialProcessingComplete = true
 }
 
 // rebuildAllAuthorizers updates RBAC authorizers for all clusters.

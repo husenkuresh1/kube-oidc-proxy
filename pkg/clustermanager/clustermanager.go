@@ -398,49 +398,55 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 	}
 
 	// Process each cluster configuration in the secret
+	var wg sync.WaitGroup
+
 	for clusterName, kubeconfigData := range secret.Data {
-		// Parse the kubeconfig data to create a REST config
-		restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigData)
-		if err != nil {
-			klog.Errorf("Failed to create REST config for cluster %s: %v", clusterName, err)
-			continue
-		}
-
-		// Create a new cluster object
-		newCluster := &cluster.Cluster{
-			Name:       clusterName,
-			RestConfig: restConfig,
-			IsStatic:   false, // Mark as dynamic cluster
-		}
-
-		// Set up the cluster with necessary components
-		if err = cm.ClusterSetup(newCluster); err != nil {
-			klog.Errorf("Failed to set up cluster %s: %v", clusterName, err)
-			continue
-		}
-
-		// Run additional setup if a setup function is provided
-		if cm.SetupFunc != nil {
-			if err := cm.SetupFunc(newCluster); err != nil {
-				klog.Errorf("Additional setup failed for cluster %s: %v", clusterName, err)
-				continue
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Parse the kubeconfig data to create a REST config
+			restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigData)
+			if err != nil {
+				klog.Errorf("Failed to create REST config for cluster %s: %v", clusterName, err)
+				return
 			}
-		}
 
-		// Add or update the cluster in the manager
-		cm.AddOrUpdateCluster(newCluster)
-		klog.V(4).Infof("Successfully added/updated dynamic cluster %s", clusterName)
+			// Create a new cluster object
+			newCluster := &cluster.Cluster{
+				Name:       clusterName,
+				RestConfig: restConfig,
+				IsStatic:   false, // Mark as dynamic cluster
+			}
 
-		// Update CAPI RBAC watcher if available
-		if cm.capiRbacWatcher != nil {
-			// Update watcher with the latest set of clusters
-			cm.capiRbacWatcher.UpdateClusters(cm.GetAllClusters())
+			// Set up the cluster with necessary components
+			if err = cm.ClusterSetup(newCluster); err != nil {
+				klog.Errorf("Failed to set up cluster %s: %v", clusterName, err)
+				return
+			}
 
-			// Reprocess RBAC objects for the new/updated cluster
-			cm.capiRbacWatcher.ProcessExistingRBACObjects()
-		}
+			// Run additional setup if a setup function is provided
+			if cm.SetupFunc != nil {
+				if err := cm.SetupFunc(newCluster); err != nil {
+					klog.Errorf("Additional setup failed for cluster %s: %v", clusterName, err)
+					return
+				}
+			}
+
+			// Add or update the cluster in the manager
+			cm.AddOrUpdateCluster(newCluster)
+			klog.V(4).Infof("Successfully added/updated dynamic cluster %s", clusterName)
+
+			// Update CAPI RBAC watcher if available
+			if cm.capiRbacWatcher != nil {
+				// Update watcher with the latest set of clusters
+				cm.capiRbacWatcher.UpdateClusters(cm.GetAllClusters())
+
+				// Reprocess RBAC objects for the new/updated cluster
+				cm.capiRbacWatcher.ProcessExistingRBACObjects()
+			}
+		}()
 	}
-
+	wg.Wait()
 	return nil
 }
 
