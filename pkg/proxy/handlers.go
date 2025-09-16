@@ -17,7 +17,6 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/logging"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
-	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 )
 
 func (p *Proxy) withHandlers(handler http.Handler) http.Handler {
@@ -64,6 +63,7 @@ func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 		}
 		req = req.WithContext(context.WithRequestInfo(req.Context(), reqInfo))
 		if reqInfo.IsResourceRequest {
+
 			user, ok := genericapirequest.UserFrom(req.Context())
 			if !ok {
 				p.handleError(rw, req, errUnauthorized)
@@ -71,10 +71,10 @@ func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 			}
 
 			// Check permission using our custom authorizer
-			authorized := p.clusterManager.CheckPermission(authorizer.SubjectTypeUser, user.GetName(), clusterName, reqInfo.Namespace, reqInfo.APIGroup, reqInfo.Resource, reqInfo.Verb)
+			authorized := p.clusterManager.CheckPermission(user.GetGroups(), user.GetName(), clusterName, reqInfo.Namespace, reqInfo.APIGroup, reqInfo.Resource, reqInfo.Name, reqInfo.Verb)
 
 			if !authorized {
-				klog.V(10).Infof("user %s not authorized to %s %s in namespace %s", user.GetName(), reqInfo.Verb, reqInfo.Resource, reqInfo.Namespace)
+				klog.Infof("user %s not authorized to %s %s in namespace %s", user.GetName(), reqInfo.Verb, reqInfo.Resource, reqInfo.Namespace)
 				p.handleError(rw, req, errUnauthorized)
 				return
 			}

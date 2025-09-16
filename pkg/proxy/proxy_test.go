@@ -32,7 +32,6 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	fakesubjectaccessreview "github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview/fake"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
-	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 )
 
 type fakeProxy struct {
@@ -83,8 +82,7 @@ func (m *mockClusterManager) RemoveCluster(name string) {
 	delete(m.clusters, name)
 }
 
-func (m *mockClusterManager) CheckPermission(subjectType authorizer.SubjectType, subjectName, cluster, namespace, apiGroup, resource, verb string) bool {
-	// For testing purposes, always return true
+func (m *mockClusterManager) CheckPermission(grops []string, subjectName, cluster, namespace, apiGroup, resource, resourceName, verb string) bool {
 	return true
 }
 

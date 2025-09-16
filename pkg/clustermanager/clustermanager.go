@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -61,7 +62,7 @@ type ClusterManager struct {
 	// secretController is the controller that watches for secret changes
 	secretController *SecretController
 
-	RBACAuthorizer *authorizer.RBACAuthorizer
+	RBACAuthorizer authorizer.Interface
 }
 
 // SecretController is a Kubernetes controller that watches for changes to secrets
@@ -96,12 +97,12 @@ type SecretController struct {
 //   - clustersRoleConfigMap: Map of cluster names to their RBAC configurations
 //   - capiRbacWatcher: Watcher for CAPI RBAC changes
 //   - maxGoroutines: Maximum number of concurrent goroutines for cluster operations
-//   - rbacAuthorizer: RBAC authorizer for permission checking using a trie structure
+//   - rbacAuthorizer: RBAC authorizer interface for permission checking
 //
 // Returns:
 //   - A new ClusterManager instance and nil error on success
 //   - nil and an error if configuration fails
-func NewClusterManager(tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher, maxGoroutines int, rbacAuthorizer *authorizer.RBACAuthorizer) (*ClusterManager, error) {
+func NewClusterManager(tokenPassthroughEnabled bool, audiences []string, clustersRoleConfigMap map[string]util.RBAC, capiRbacWatcher *crd.CAPIRbacWatcher, maxGoroutines int, rbacAuthorizer authorizer.Interface) (*ClusterManager, error) {
 	// Build Kubernetes configuration for the management cluster
 	config, err := util.BuildConfiguration()
 	if err != nil {
@@ -670,10 +671,25 @@ func (cm *ClusterManager) StopSecretController() {
 }
 
 // CheckPermission checks if a subject has permission to perform an action on a resource
-func (cm *ClusterManager) CheckPermission(subjectType authorizer.SubjectType, subjectName, cluster, namespace, apiGroup, resource, verb string) bool {
+func (cm *ClusterManager) CheckPermission(groups []string, subjectName, cluster, namespace, apiGroup, resource, resourceName, verb string) bool {
 	if cm.RBACAuthorizer == nil {
 		klog.Warningf("RBACAuthorizer is nil, denying permission check for subject %s", subjectName)
 		return false
 	}
-	return cm.RBACAuthorizer.CheckPermission(subjectType, subjectName, cluster, namespace, apiGroup, resource, verb)
+
+	attrs := authorizer.Attributes{
+		User: &user.DefaultInfo{
+			Name:   subjectName,
+			Groups: groups,
+		},
+		Verb:              verb,
+		Cluster:           cluster,
+		Namespace:         namespace,
+		APIGroup:          apiGroup,
+		Resource:          resource,
+		ResourceName:      resourceName,
+		IsResourceRequest: true,
+	}
+
+	return cm.RBACAuthorizer.CheckPermission(attrs)
 }

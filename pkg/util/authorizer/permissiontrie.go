@@ -20,6 +20,9 @@ const (
 	VerbAll // Wildcard
 )
 
+// CollectionVerbs represents verbs that act on a collection of resources.
+const CollectionVerbs = VerbList | VerbWatch | VerbCreate | VerbDeleteCollection
+
 // verbMap translates verb strings to their bitmask representation
 var verbMap = map[string]uint32{
 	"get":              VerbGet,
@@ -213,6 +216,7 @@ func (t *PermissionTrie) CheckURLPermission(subjectType SubjectType, subjectName
 
 // check is an internal helper to search for permissions down the trie.
 func (n *NamespaceNode) check(apiGroup, resource, resourceName string, verbBit uint32) bool {
+
 	if apiGroupNode, exists := n.apiGroupNodes[apiGroup]; exists {
 		if apiGroupNode.check(resource, resourceName, verbBit) {
 			return true
@@ -223,6 +227,7 @@ func (n *NamespaceNode) check(apiGroup, resource, resourceName string, verbBit u
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -248,7 +253,12 @@ func (r *ResourceNode) check(resourceName string, verbBit uint32) bool {
 		return false
 	}
 
-	// If resourceNames is nil, it's a wildcard, so any name is allowed.
+	// Collection-level verbs are not restricted by resourceNames.
+	if (verbBit & CollectionVerbs) != 0 {
+		return true
+	}
+
+	// For item-level verbs, if resourceNames is nil, it's a wildcard.
 	if r.resourceNames == nil {
 		return true
 	}

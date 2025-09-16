@@ -1,19 +1,19 @@
 package authorizer
 
 import (
-	"fmt"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/klog/v2"
 )
 
 // Attributes holds all the details about a request to be checked.
 type Attributes struct {
-	User      user.Info
-	Verb      string
-	Cluster   string
+	User    user.Info
+	Verb    string
+	Cluster string
 
 	IsResourceRequest bool
 	Path              string
@@ -186,7 +186,7 @@ func resolveAggregatedRoles(clusterRoles []*v1.ClusterRole) []*v1.ClusterRole {
 func resolveAggregation(role *v1.ClusterRole, rolesByName map[string]*v1.ClusterRole, resolveStack map[string]bool) {
 	// Avoid infinite loops if roles include each other.
 	if resolveStack[role.Name] {
-		fmt.Printf("Warning: cycle detected in ClusterRole aggregation involving %s\n", role.Name)
+		klog.Warningf("Warning: cycle detected in ClusterRole aggregation involving %s\n", role.Name)
 		return
 	}
 	resolveStack[role.Name] = true
@@ -199,7 +199,7 @@ func resolveAggregation(role *v1.ClusterRole, rolesByName map[string]*v1.Cluster
 	for _, selector := range role.AggregationRule.ClusterRoleSelectors {
 		parsedSelector, err := metav1.LabelSelectorAsSelector(&selector)
 		if err != nil {
-			fmt.Printf("Warning: could not parse label selector in ClusterRole %s: %v\n", role.Name, err)
+			klog.Warningf("Warning: could not parse label selector in ClusterRole %s: %v\n", role.Name, err)
 			continue
 		}
 
@@ -212,7 +212,7 @@ func resolveAggregation(role *v1.ClusterRole, rolesByName map[string]*v1.Cluster
 				// First, resolve the other role's aggregations.
 				resolveAggregation(otherRole, rolesByName, resolveStack)
 				// Then, append its rules to the current role.
-			role.Rules = append(role.Rules, otherRole.Rules...)
+				role.Rules = append(role.Rules, otherRole.Rules...)
 			}
 		}
 	}

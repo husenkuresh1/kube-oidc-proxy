@@ -16,6 +16,7 @@ import (
 // newTestClusterManager creates a properly initialized ClusterManager for testing
 func newTestClusterManager() *ClusterManager {
 	fakeClient := fake.NewSimpleClientset()
+	rbacAuthorizer := authorizer.NewRBACAuthorizer()
 
 	return &ClusterManager{
 		clusters:                make(map[string]*cluster.Cluster),
@@ -23,7 +24,7 @@ func newTestClusterManager() *ClusterManager {
 		tokenPassthroughEnabled: false,
 		audiences:               []string{},
 		clustersRoleConfigMap:   make(map[string]util.RBAC),
-		RBACAuthorizer:          authorizer.NewRBACAuthorizer(),
+		RBACAuthorizer:          rbacAuthorizer,
 		maxGoroutines:           10,
 	}
 }
