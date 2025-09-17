@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
-	"github.com/Improwised/kube-oidc-proxy/pkg/clustermanager"
 	"github.com/Improwised/kube-oidc-proxy/pkg/mocks"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/hooks"
@@ -40,6 +40,46 @@ type fakeProxy struct {
 	fakeToken *mocks.MockToken
 	fakeRT    *fakeRT
 	*Proxy
+}
+
+// mockClusterManager for testing
+type mockClusterManager struct {
+	clusters map[string]*cluster.Cluster
+	lock     sync.RWMutex
+}
+
+func newMockClusterManager() *mockClusterManager {
+	return &mockClusterManager{
+		clusters: make(map[string]*cluster.Cluster),
+	}
+}
+
+func (m *mockClusterManager) AddOrUpdateCluster(cluster *cluster.Cluster) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.clusters[cluster.Name] = cluster
+}
+
+func (m *mockClusterManager) GetCluster(name string) *cluster.Cluster {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.clusters[name]
+}
+
+func (m *mockClusterManager) GetAllClusters() []*cluster.Cluster {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	clusters := make([]*cluster.Cluster, 0, len(m.clusters))
+	for _, c := range m.clusters {
+		clusters = append(clusters, c)
+	}
+	return clusters
+}
+
+func (m *mockClusterManager) RemoveCluster(name string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	delete(m.clusters, name)
 }
 
 type fakeRW struct {
@@ -305,8 +345,8 @@ func newTestProxy(t *testing.T) *fakeProxy {
 		RBACConfig:            &util.RBAC{},
 	}
 
-	clustermanager, err := clustermanager.NewClusterManager(make(<-chan struct{}), false, nil, nil, nil)
-	assert.Nil(t, err, "error should be nil")
+	// Use mock cluster manager instead of real implementation
+	clustermanager := newMockClusterManager()
 	clustermanager.AddOrUpdateCluster(testCluster)
 
 	p := &fakeProxy{
