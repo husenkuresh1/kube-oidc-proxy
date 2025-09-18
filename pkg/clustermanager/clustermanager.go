@@ -617,7 +617,8 @@ func (cm *ClusterManager) ClusterSetup(cluster *cluster.Cluster) error {
 	}
 
 	// Load RBAC configuration into the cluster
-	if err = rbac.LoadRBAC(cluster); err != nil {
+
+	if err = rbac.LoadRBAC(cluster, cm.RBACAuthorizer); err != nil {
 		return fmt.Errorf("failed to load RBAC configuration: %w", err)
 	}
 

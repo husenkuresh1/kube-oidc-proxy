@@ -6,15 +6,13 @@ import (
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"github.com/Improwised/kube-oidc-proxy/pkg/util/authorizer"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 )
-
-// OnRBACUpdateFunc defines a function type for RBAC update callbacks
-type OnRBACUpdateFunc func(rbacConfig *util.RBAC, clusterName string)
 
 type CAPIRbacWatcher struct {
 	CAPIClusterRoleInformer        cache.SharedIndexInformer
@@ -23,11 +21,11 @@ type CAPIRbacWatcher struct {
 	CAPIRoleBindingInformer        cache.SharedIndexInformer
 	clusters                       []*cluster.Cluster
 	initialProcessingComplete      bool
-	onRBACUpdate                   OnRBACUpdateFunc
+	authorizer                     authorizer.Interface
 	mu                             sync.RWMutex
 }
 
-func NewCAPIRbacWatcher(clusters []*cluster.Cluster, onRBACUpdate OnRBACUpdateFunc) (*CAPIRbacWatcher, error) {
+func NewCAPIRbacWatcher(clusters []*cluster.Cluster, auth authorizer.Interface) (*CAPIRbacWatcher, error) {
 
 	clusterConfig, err := util.BuildConfiguration()
 	if err != nil {
@@ -53,7 +51,7 @@ func NewCAPIRbacWatcher(clusters []*cluster.Cluster, onRBACUpdate OnRBACUpdateFu
 		CAPIRoleBindingInformer:        capiRoleBindingInformer,
 		CAPIClusterRoleBindingInformer: capiClusterRoleBindingInformer,
 		clusters:                       clusters,
-		onRBACUpdate:                   onRBACUpdate,
+		authorizer:                     auth,
 	}
 
 	watcher.RegisterEventHandlers()

@@ -73,12 +73,9 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			}
 
 			rbacAuthorizer := authorizer.NewRBACAuthorizer()
-			onRBACUpdate := func(rbacConfig *util.RBAC, clusterName string) {
-				rbacAuthorizer.UpdatePermissionTrie(rbacConfig, clusterName)
-			}
 
 			// Initialize CAPI RBAC watcher if available
-			capiRBACWatcher, err := crd.NewCAPIRbacWatcher(clusterConfigs, onRBACUpdate)
+			capiRBACWatcher, err := crd.NewCAPIRbacWatcher(clusterConfigs, rbacAuthorizer)
 			if err != nil {
 				klog.Errorf("Failed to initialize CAPI RBAC watcher: %v", err)
 				capiRBACWatcher = nil // Continue without watcher if initialization fails

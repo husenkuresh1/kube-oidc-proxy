@@ -375,7 +375,7 @@ func (ctrl *CAPIRbacWatcher) ProcessExistingRBACObjects() {
 // rebuildAllAuthorizers updates RBAC authorizers for all clusters.
 func (ctrl *CAPIRbacWatcher) RebuildAllAuthorizers() {
 	for _, c := range ctrl.clusters {
-		ctrl.onRBACUpdate(c.RBACConfig, c.Name)
+		ctrl.authorizer.UpdatePermissionTrie(c.RBACConfig, c.Name)
 
 	}
 }
