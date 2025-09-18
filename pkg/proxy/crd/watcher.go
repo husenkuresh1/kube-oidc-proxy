@@ -19,6 +19,7 @@ type CAPIRbacWatcher struct {
 	CAPIClusterRoleBindingInformer cache.SharedIndexInformer
 	CAPIRoleBindingInformer        cache.SharedIndexInformer
 	clusters                       []*cluster.Cluster
+	initialProcessingComplete      bool
 	mu                             sync.RWMutex
 }
 
@@ -73,6 +74,10 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	// Register event handlers for CAPIRole
 	w.CAPIRoleInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			if !w.initialProcessingComplete {
+				klog.V(10).Infof("Skipping CAPIRole add event during initial processing")
+				return
+			}
 			capiRole, err := ConvertUnstructured[CAPIRole](obj)
 			if err != nil {
 				klog.Errorf("Failed to convert CAPIRole: %v", err)
@@ -119,6 +124,10 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	// Register event handlers for CAPIClusterRole
 	w.CAPIClusterRoleInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			if !w.initialProcessingComplete {
+				klog.V(10).Infof("Skipping CAPIClusterRole add event during initial processing")
+				return
+			}
 			capiClusterRole, err := ConvertUnstructured[CAPIClusterRole](obj)
 			if err != nil {
 				klog.Errorf("Failed to convert CAPIClusterRole: %v", err)
@@ -165,6 +174,10 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	// Register event handlers for CAPIRoleBinding
 	w.CAPIRoleBindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			if !w.initialProcessingComplete {
+				klog.V(10).Infof("Skipping CAPIRoleBinding add event during initial processing")
+				return
+			}
 			capiRoleBinding, err := ConvertUnstructured[CAPIRoleBinding](obj)
 			if err != nil {
 				klog.Errorf("Failed to convert CAPIRoleBinding: %v", err)
@@ -211,6 +224,10 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	// Register event handlers for CAPIClusterRoleBinding
 	w.CAPIClusterRoleBindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			if !w.initialProcessingComplete {
+				klog.V(10).Infof("Skipping CAPIClusterRoleBinding add event during initial processing")
+				return
+			}
 			capiClusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](obj)
 			if err != nil {
 				klog.Errorf("Failed to convert CAPIClusterRoleBinding: %v", err)
