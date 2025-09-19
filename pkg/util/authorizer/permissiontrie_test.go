@@ -18,16 +18,16 @@ func TestPermissionTrie_AddAndCheckResourcePermission(t *testing.T) {
 	trie.AddResourcePermission(subjectType, subjectName, cluster, namespace, apiGroup, resource, verb, []string{resourceName})
 
 	testCases := []struct {
-		name          string
-		subjectType   SubjectType
-		subjectName   string
-		cluster       string
-		namespace     string
-		apiGroup      string
-		resource      string
-		resourceName  string
-		verb          string
-		expected      bool
+		name         string
+		subjectType  SubjectType
+		subjectName  string
+		cluster      string
+		namespace    string
+		apiGroup     string
+		resource     string
+		resourceName string
+		verb         string
+		expected     bool
 	}{
 		{"ExactMatch", subjectType, subjectName, cluster, namespace, apiGroup, resource, resourceName, verb, true},
 		{"WrongVerb", subjectType, subjectName, cluster, namespace, apiGroup, resource, resourceName, "list", false},
@@ -69,22 +69,41 @@ func TestPermissionTrie_Wildcards(t *testing.T) {
 	// URL wildcard
 	trie.AddURLPermission(SubjectTypeUser, subject, cluster, "*", "get")
 
-
 	testCases := []struct {
 		name     string
 		check    func() bool
 		expected bool
 	}{
-		{"VerbWildcard_AllowsGet", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "pods", "pod1", "get") }, true},
-		{"VerbWildcard_AllowsDelete", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "pods", "pod1", "delete") }, true},
-		{"ResourceWildcard_AllowsPods", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "pods", "pod1", "get") }, true},
-		{"ResourceWildcard_AllowsServices", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "services", "svc1", "get") }, true},
-		{"APIGroupWildcard_AllowsApps", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "deployments", "dep1", "list") }, true},
-		{"APIGroupWildcard_AllowsBatch", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "batch", "deployments", "dep1", "list") }, true},
-		{"NamespaceWildcard_AllowsInNamespace", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "some-ns", "batch", "jobs", "job1", "watch") }, true},
-		{"NamespaceWildcard_AllowsInEmptyNamespace", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "", "batch", "jobs", "job1", "watch") }, true},
-		{"ResourceNameWildcard_AllowsAnyName", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns2", "core", "secrets", "secret1", "get") }, true},
-		{"ResourceNameWildcard_AllowsOtherName", func() bool { return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns2", "core", "secrets", "secret2", "get") }, true},
+		{"VerbWildcard_AllowsGet", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "pods", "pod1", "get")
+		}, true},
+		{"VerbWildcard_AllowsDelete", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "pods", "pod1", "delete")
+		}, true},
+		{"ResourceWildcard_AllowsPods", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "pods", "pod1", "get")
+		}, true},
+		{"ResourceWildcard_AllowsServices", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "services", "svc1", "get")
+		}, true},
+		{"APIGroupWildcard_AllowsApps", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "apps", "deployments", "dep1", "list")
+		}, true},
+		{"APIGroupWildcard_AllowsBatch", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns1", "batch", "deployments", "dep1", "list")
+		}, true},
+		{"NamespaceWildcard_AllowsInNamespace", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "some-ns", "batch", "jobs", "job1", "watch")
+		}, true},
+		{"NamespaceWildcard_AllowsInEmptyNamespace", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "", "batch", "jobs", "job1", "watch")
+		}, true},
+		{"ResourceNameWildcard_AllowsAnyName", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns2", "core", "secrets", "secret1", "get")
+		}, true},
+		{"ResourceNameWildcard_AllowsOtherName", func() bool {
+			return trie.CheckResourcePermission(SubjectTypeUser, subject, cluster, "ns2", "core", "secrets", "secret2", "get")
+		}, true},
 		{"URLWildcard_AllowsSpecificURL", func() bool { return trie.CheckURLPermission(SubjectTypeUser, subject, cluster, "/api/v1/pods", "get") }, true},
 		{"URLWildcard_AllowsOtherURL", func() bool { return trie.CheckURLPermission(SubjectTypeUser, subject, cluster, "/metrics", "get") }, true},
 		{"URLWildcard_DeniesWrongVerb", func() bool { return trie.CheckURLPermission(SubjectTypeUser, subject, cluster, "/api/v1/pods", "post") }, false},
@@ -135,7 +154,7 @@ func TestPermissionTrie_AddAndCheckURLPermission(t *testing.T) {
 func TestPermissionTrie_RemoveClusterPermissions(t *testing.T) {
 	trie := NewPermissionTrie()
 	subject := "multi-cluster-user"
-	
+
 	// Add permissions for two clusters
 	trie.AddResourcePermission(SubjectTypeUser, subject, "cluster-a", "default", "core", "pods", "get", nil)
 	trie.AddURLPermission(SubjectTypeUser, subject, "cluster-a", "/logs", "get")

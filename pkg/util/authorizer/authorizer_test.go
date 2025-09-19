@@ -13,7 +13,7 @@ import (
 func TestNewRBACAuthorizer(t *testing.T) {
 	auth := NewRBACAuthorizer()
 	assert.NotNil(t, auth, "NewRBACAuthorizer should not return nil")
-	
+
 	rbacAuth, ok := auth.(*RBACAuthorizer)
 	assert.True(t, ok, "auth should be of type *RBACAuthorizer")
 	assert.NotNil(t, rbacAuth.trie, "Authorizer trie should not be nil")
@@ -80,85 +80,85 @@ func TestUpdateAndCheckPermissions(t *testing.T) {
 		{
 			name: "User with direct RoleBinding permission",
 			attributes: Attributes{
-				User:      &user.DefaultInfo{Name: "test-user"},
-				Cluster:   clusterName,
+				User:              &user.DefaultInfo{Name: "test-user"},
+				Cluster:           clusterName,
 				IsResourceRequest: true,
-				Namespace: "ns1",
-				APIGroup:  "core",
-				Resource:  "pods",
-				Verb:      "get",
+				Namespace:         "ns1",
+				APIGroup:          "core",
+				Resource:          "pods",
+				Verb:              "get",
 			},
 			expected: true,
 		},
 		{
 			name: "User with direct RoleBinding, wrong verb",
 			attributes: Attributes{
-				User:      &user.DefaultInfo{Name: "test-user"},
-				Cluster:   clusterName,
+				User:              &user.DefaultInfo{Name: "test-user"},
+				Cluster:           clusterName,
 				IsResourceRequest: true,
-				Namespace: "ns1",
-				APIGroup:  "core",
-				Resource:  "pods",
-				Verb:      "delete",
+				Namespace:         "ns1",
+				APIGroup:          "core",
+				Resource:          "pods",
+				Verb:              "delete",
 			},
 			expected: false,
 		},
 		{
 			name: "User in group with ClusterRoleBinding permission",
 			attributes: Attributes{
-				User:      &user.DefaultInfo{Name: "some-user", Groups: []string{"test-group"}},
-				Cluster:   clusterName,
+				User:              &user.DefaultInfo{Name: "some-user", Groups: []string{"test-group"}},
+				Cluster:           clusterName,
 				IsResourceRequest: true,
-				APIGroup:  "core",
-				Resource:  "nodes",
-				Verb:      "get",
+				APIGroup:          "core",
+				Resource:          "nodes",
+				Verb:              "get",
 			},
 			expected: true,
 		},
 		{
 			name: "User in group, wrong resource",
 			attributes: Attributes{
-				User:      &user.DefaultInfo{Name: "some-user", Groups: []string{"test-group"}},
-				Cluster:   clusterName,
+				User:              &user.DefaultInfo{Name: "some-user", Groups: []string{"test-group"}},
+				Cluster:           clusterName,
 				IsResourceRequest: true,
-				APIGroup:  "core",
-				Resource:  "services",
-				Verb:      "get",
+				APIGroup:          "core",
+				Resource:          "services",
+				Verb:              "get",
 			},
 			expected: false,
 		},
 		{
 			name: "User with NonResourceURL permission",
 			attributes: Attributes{
-				User:      &user.DefaultInfo{Name: "metrics-user"},
-				Cluster:   clusterName,
+				User:              &user.DefaultInfo{Name: "metrics-user"},
+				Cluster:           clusterName,
 				IsResourceRequest: false,
-				Path:      "/metrics",
-				Verb:      "get",
+				Path:              "/metrics",
+				Verb:              "get",
 			},
 			expected: true,
 		},
 		{
 			name: "User with NonResourceURL, wrong path",
 			attributes: Attributes{
-				User:      &user.DefaultInfo{Name: "metrics-user"},
-				Cluster:   clusterName,
+				User:              &user.DefaultInfo{Name: "metrics-user"},
+				Cluster:           clusterName,
 				IsResourceRequest: false,
-				Path:      "/logs",
-				Verb:      "get",
+				Path:              "/logs",
+				Verb:              "get",
 			},
 			expected: false,
 		},
 		{
 			name: "User with no permissions",
 			attributes: Attributes{
-				User:      &user.DefaultInfo{Name: "unauthorized-user"},
-				Cluster:   clusterName,
+				User:              &user.DefaultInfo{Name: "unauthorized-user"},
+				Cluster:           clusterName,
 				IsResourceRequest: true,
-				Namespace: "ns1",
-				APIGroup:  "core",
-				Resource:  "pods",
-				Verb:      "get",
+				Namespace:         "ns1",
+				APIGroup:          "core",
+				Resource:          "pods",
+				Verb:              "get",
 			},
 			expected: false,
 		},
@@ -188,7 +188,7 @@ func TestRemoveClusterPermissions(t *testing.T) {
 			RoleRef:  v1.RoleRef{Kind: "ClusterRole", Name: "reader"},
 		}},
 	}
-	
+
 	auth.UpdatePermissionTrie(rbacConfigA, clusterA)
 	auth.UpdatePermissionTrie(rbacConfigA, clusterB)
 
@@ -196,7 +196,7 @@ func TestRemoveClusterPermissions(t *testing.T) {
 
 	attrs.Cluster = clusterA
 	assert.True(t, auth.CheckPermission(attrs), "Permission should exist on cluster-a before removal")
-	
+
 	attrs.Cluster = clusterB
 	assert.True(t, auth.CheckPermission(attrs), "Permission should exist on cluster-b")
 
@@ -258,7 +258,7 @@ func TestResolveAggregatedRoles(t *testing.T) {
 	}
 	assert.True(t, hasGet, "Resolved role B should have 'get' verb")
 	assert.True(t, hasList, "Resolved role B should have 'list' verb")
-	
+
 	// Test for cycle detection, just ensure it terminates without error.
 	// The function prints a warning, which we can't easily check here,
 	// but termination is the most important part.
